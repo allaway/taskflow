@@ -8,7 +8,9 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npx prisma generate && npm run build
+# DATABASE_URL is not needed at build time — prisma generate only reads the schema,
+# not the database. The dummy value prevents any config from trying to validate it.
+RUN DATABASE_URL="postgresql://build:build@localhost:5432/build" npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
