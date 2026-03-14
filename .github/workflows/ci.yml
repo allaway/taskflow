@@ -81,6 +81,7 @@ jobs:
       DATABASE_URL: postgresql://taskuser:taskpass@localhost:5432/taskmanagement
       NEXTAUTH_SECRET: ci-e2e-secret-not-used-in-production
       NEXTAUTH_URL: http://localhost:3000
+      AUTH_TRUST_HOST: "true"
       FIELD_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 
     steps:

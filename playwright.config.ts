@@ -20,10 +20,16 @@ export default defineConfig({
   ],
   webServer: process.env.CI
     ? {
-        command: "npm run start",
+        // output: standalone requires node server.js, not next start
+        command: "node .next/standalone/server.js",
         url: "http://localhost:3000",
         reuseExistingServer: false,
         timeout: 120000,
+        env: {
+          PORT: "3000",
+          HOSTNAME: "0.0.0.0",
+          AUTH_TRUST_HOST: "true",
+        },
       }
     : undefined,
 });
