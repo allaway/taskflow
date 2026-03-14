@@ -22,6 +22,15 @@ export async function POST(req: NextRequest) {
 
   const { name, email, password } = parsed.data;
 
+  const allowedEmails = (process.env.ALLOWED_REGISTRATION_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (allowedEmails.length > 0 && !allowedEmails.includes(email.toLowerCase())) {
+    return NextResponse.json({ error: "Registration is not open." }, { status: 403 });
+  }
+
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     return NextResponse.json({ error: "Email already in use" }, { status: 409 });
