@@ -2,21 +2,32 @@
 import { useEffect, useState } from "react";
 import { format, addWeeks, subWeeks, startOfWeek, addDays, isToday } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Task } from "@prisma/client";
 
+const priorityDot: Record<string, string> = {
+  HIGH:   "bg-rose-500",
+  MEDIUM: "bg-amber-500",
+  LOW:    "bg-slate-500",
+};
+
+const statusDot: Record<string, string> = {
+  INBOX:     "bg-muted-foreground/40",
+  SCHEDULED: "bg-sky-500",
+  COMPLETED: "bg-emerald-500",
+  CANCELLED: "bg-muted-foreground/20",
+};
+
 export default function WeekPage() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [tasksByDate, setTasksByDate] = useState<Record<string, Task[]>>({});
   const [loading, setLoading] = useState(true);
+  const [refresh, setRefresh] = useState(0);
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-
-  const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -49,104 +60,104 @@ export default function WeekPage() {
     else toast.error("Failed to update task");
   }
 
-  const statusColor = {
-    INBOX: "bg-muted",
-    SCHEDULED: "bg-blue-500",
-    COMPLETED: "bg-green-500",
-    CANCELLED: "bg-muted-foreground",
-  };
+  const thisWeek = format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd") === format(weekStart, "yyyy-MM-dd");
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setWeekStart((w) => subWeeks(w, 1))}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="text-lg font-semibold">
-            {format(weekStart, "MMM d")} — {format(addDays(weekStart, 6), "MMM d, yyyy")}
-          </h1>
-          <Button variant="ghost" size="icon" onClick={() => setWeekStart((w) => addWeeks(w, 1))}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+      {/* Header */}
+      <div className="flex items-center gap-2 px-6 h-14 border-b border-border/60 shrink-0">
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setWeekStart((w) => subWeeks(w, 1))}>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="px-1">
+          <span className="text-sm font-semibold">
+            {format(weekStart, "MMM d")}
+            <span className="text-muted-foreground font-normal"> — </span>
+            {format(addDays(weekStart, 6), "MMM d, yyyy")}
+          </span>
+        </div>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setWeekStart((w) => addWeeks(w, 1))}>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        {!thisWeek && (
           <Button
             variant="ghost"
             size="sm"
-            className="text-xs text-muted-foreground"
+            className="h-7 text-xs text-muted-foreground ml-1"
             onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
           >
             This week
           </Button>
-        </div>
+        )}
       </div>
 
+      {/* Grid */}
       <div className="flex-1 overflow-auto">
-        <div className="grid grid-cols-7 h-full min-h-0 divide-x divide-border">
+        <div className="grid grid-cols-7 h-full min-h-0 divide-x divide-border/40">
           {days.map((day) => {
             const dateStr = format(day, "yyyy-MM-dd");
             const dayTasks = tasksByDate[dateStr] ?? [];
             const completed = dayTasks.filter((t) => t.status === "COMPLETED").length;
+            const today = isToday(day);
 
             return (
-              <div key={dateStr} className="flex flex-col min-h-0">
-                <div
-                  className={cn(
-                    "px-3 py-2 border-b border-border text-center shrink-0",
-                    isToday(day) && "bg-primary/5"
-                  )}
-                >
-                  <p className="text-xs text-muted-foreground">{format(day, "EEE")}</p>
+              <div key={dateStr} className={cn("flex flex-col min-h-0", today && "bg-primary/[0.03]")}>
+                {/* Day header */}
+                <div className={cn(
+                  "px-2 py-3 border-b border-border/40 text-center shrink-0",
+                )}>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-medium mb-1">
+                    {format(day, "EEE")}
+                  </p>
                   <Link href={`/today?date=${dateStr}`}>
-                    <p
-                      className={cn(
-                        "text-sm font-semibold hover:text-primary transition-colors",
-                        isToday(day) && "text-primary"
-                      )}
-                    >
+                    <div className={cn(
+                      "inline-flex items-center justify-center h-7 w-7 rounded-full text-sm font-semibold transition-colors mx-auto",
+                      today
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-muted text-foreground"
+                    )}>
                       {format(day, "d")}
-                    </p>
+                    </div>
                   </Link>
                   {dayTasks.length > 0 && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {completed}/{dayTasks.length} done
+                    <p className="text-[10px] text-muted-foreground/50 mt-1">
+                      {completed}/{dayTasks.length}
                     </p>
                   )}
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {/* Tasks */}
+                <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
                   {loading ? (
-                    <div className="h-8 rounded bg-muted animate-pulse" />
+                    <div className="h-6 rounded bg-muted/40 animate-pulse mx-1" />
                   ) : (
                     dayTasks.map((task) => (
                       <button
                         key={task.id}
                         onClick={() => toggleComplete(task.id, task.status)}
-                        className="w-full text-left"
+                        className="w-full text-left group"
                       >
-                        <div
-                          className={cn(
-                            "flex items-center gap-1.5 p-1.5 rounded text-xs hover:bg-accent transition-colors group",
-                            task.status === "COMPLETED" && "opacity-50"
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              "h-1.5 w-1.5 rounded-full shrink-0",
-                              statusColor[task.status]
-                            )}
-                          />
-                          <span
-                            className={cn(
-                              "truncate",
-                              task.status === "COMPLETED" && "line-through"
-                            )}
-                          >
+                        <div className={cn(
+                          "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors",
+                          "hover:bg-white/[0.04]",
+                          task.status === "COMPLETED" && "opacity-40"
+                        )}>
+                          <div className={cn(
+                            "h-1.5 w-1.5 rounded-full shrink-0",
+                            task.status === "COMPLETED"
+                              ? statusDot.COMPLETED
+                              : priorityDot[task.priority]
+                          )} />
+                          <span className={cn(
+                            "truncate text-[11px] leading-relaxed",
+                            task.status === "COMPLETED" && "line-through"
+                          )}>
                             {task.title}
                           </span>
                           {task.startTime && (
-                            <Badge variant="outline" className="ml-auto text-[9px] px-1 py-0 shrink-0">
-                              {task.startTime}
-                            </Badge>
+                            <span className="ml-auto text-[9px] text-muted-foreground/50 shrink-0 tabular-nums">
+                              {task.startTime.slice(0, 5)}
+                            </span>
                           )}
                         </div>
                       </button>
