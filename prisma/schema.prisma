@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String
+  name             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // N8N integration (encrypted)
+  n8nWebhookSecret String?
+  n8nOutboundUrl   String?
+
+  // AI provider config (encrypted)
+  aiProvider       String?  // "anthropic" | "openrouter"
+  aiApiKey         String?  // AES-256-GCM encrypted
+  aiModel          String?
+  aiSchedulingModel String?
+
+  tasks            Task[]
+}
+
+model Task {
+  id            String     @id @default(cuid())
+  title         String
+  description   String?
+  notes         String?
+  status        TaskStatus @default(INBOX)
+  priority      Priority   @default(MEDIUM)
+  source        TaskSource @default(MANUAL)
+
+  scheduledDate DateTime?
+  startTime     String?    // "HH:MM" format
+  duration      Int?       // minutes
+
+  recurringRule String?    // cron expression e.g. "0 9 * * 1" (Mon 9am)
+  externalId    String?    // for deduplication from integrations
+
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([userId])
+  @@index([userId, scheduledDate])
+  @@index([userId, status])
+  @@unique([userId, externalId])
+}
+
+enum TaskStatus {
+  INBOX
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TaskSource {
+  MANUAL
+  N8N
+  RECURRING
+}

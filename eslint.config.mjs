@@ -13,6 +13,14 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // Standard async data-fetching in useEffect is valid — disable React Compiler rules
+      // that flag normal patterns as errors.
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/preserve-manual-memoization": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

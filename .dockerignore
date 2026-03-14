@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.env.*
+node_modules
+.next
+__tests__
+playwright-report
+test-results
+*.md
+!README.md
+.husky
+.github
+docker-compose.yml
+docker-compose.prod.yml
