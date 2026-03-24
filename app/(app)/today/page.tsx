@@ -23,7 +23,6 @@ import {
   useDroppable,
   DragOverlay,
 } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 import type { Task } from "@prisma/client";
 import type { CalendarEvent } from "@/app/api/calendar/events/route";
 

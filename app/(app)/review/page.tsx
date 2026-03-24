@@ -20,12 +20,12 @@ export default function ReviewPage() {
   const [triaging, setTriaging] = useState(false);
   const [refresh, setRefresh] = useState(0);
 
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
 
   useEffect(() => {
     let active = true;
     setLoading(true);
+    const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
     Promise.all(
       days.map((day) =>
         fetch(`/api/tasks?date=${format(day, "yyyy-MM-dd")}`)
@@ -45,7 +45,6 @@ export default function ReviewPage() {
 
   const completed = tasks.filter((t) => t.status === "COMPLETED");
   const incomplete = tasks.filter((t) => t.status !== "COMPLETED" && t.status !== "CANCELLED");
-  const totalPlannedMins = tasks.reduce((acc, t) => acc + (t.duration ?? 30), 0);
   const completedMins = completed.reduce((acc, t) => acc + (t.duration ?? 30), 0);
 
   async function deferAll() {

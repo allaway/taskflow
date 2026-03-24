@@ -350,7 +350,7 @@ export default function SettingsPage() {
               label="How to get your Google Calendar iCal URL"
               hint={
                 <span>
-                  Google Calendar → Settings → select a calendar → "Secret address in iCal format". Copy the URL and paste it below.
+                  Google Calendar → Settings → select a calendar → &quot;Secret address in iCal format&quot;. Copy the URL and paste it below.
                 </span>
               }
             >
