@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       source: "API",
       userId: apiToken.userId,
       scheduledDate: taskData.scheduledDate ? new Date(taskData.scheduledDate) : undefined,
-      status: taskData.scheduledDate ? "SCHEDULED" : "INBOX",
+      status: "INBOX",
     },
   });
 

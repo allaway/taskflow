@@ -6,6 +6,7 @@ import { MoreHorizontal, Trash2, Wand2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Task } from "@prisma/client";
 import { GeneratePromptModal } from "@/components/ai/GeneratePromptModal";
+import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 
 interface TaskCardProps {
   task: Task;
@@ -29,6 +30,7 @@ const sourceLabel = {
 
 export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskCardProps) {
   const [promptOpen, setPromptOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const done = task.status === "COMPLETED";
 
   async function toggleComplete() {
@@ -72,7 +74,7 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
         </button>
 
         {/* Content */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setDetailOpen(true)}>
           <p className={cn(
             "text-sm leading-snug break-words",
             done ? "line-through text-muted-foreground" : "text-foreground"
@@ -146,6 +148,11 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
         onOpenChange={setPromptOpen}
         taskId={task.id}
         taskTitle={task.title}
+      />
+      <TaskDetailModal
+        task={task}
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
       />
     </>
   );

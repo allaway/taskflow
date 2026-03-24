@@ -84,7 +84,7 @@ export default function InboxPage() {
             <SelectContent>
               <SelectItem value="all">All sources</SelectItem>
               <SelectItem value="MANUAL">Manual</SelectItem>
-              <SelectItem value="N8N">From N8N</SelectItem>
+              <SelectItem value="API">From API</SelectItem>
               <SelectItem value="RECURRING">Recurring</SelectItem>
             </SelectContent>
           </Select>
