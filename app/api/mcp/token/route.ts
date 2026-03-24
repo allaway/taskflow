@@ -9,43 +9,62 @@ import { hashToken } from "@/lib/tokens";
  * client_id: anything (ignored)
  * client_secret: a TaskFlow API token (tf_…)
  *
- * Returns the validated token as the access_token so the MCP endpoint
- * can verify it using the same API token lookup.
+ * Supports three auth methods:
+ *  1. HTTP Basic auth header: Authorization: Basic base64(client_id:client_secret)
+ *  2. Form body: client_id=...&client_secret=tf_...
+ *  3. JSON body: { "client_id": "...", "client_secret": "tf_..." }
  */
 export async function POST(req: NextRequest) {
+  let clientSecret: string | null = null;
+  let grantType: string | null = null;
+
+  // Method 1: HTTP Basic auth (RFC 6749 §2.3.1) — most common for Cowork
+  const authHeader = req.headers.get("authorization") ?? "";
+  if (authHeader.startsWith("Basic ")) {
+    const decoded = Buffer.from(authHeader.slice(6), "base64").toString("utf-8");
+    // Format is client_id:client_secret — secret is everything after the first colon
+    const colonIdx = decoded.indexOf(":");
+    if (colonIdx !== -1) {
+      clientSecret = decoded.slice(colonIdx + 1) || null;
+    } else {
+      // No colon — treat the whole value as the secret
+      clientSecret = decoded || null;
+    }
+  }
+
+  // Parse body regardless (to get grant_type and fallback secret)
+  const contentType = req.headers.get("content-type") ?? "";
   let body: URLSearchParams | null = null;
 
-  const contentType = req.headers.get("content-type") ?? "";
   if (contentType.includes("application/x-www-form-urlencoded")) {
-    const text = await req.text();
+    const text = await req.text().catch(() => "");
     body = new URLSearchParams(text);
   } else {
-    // Some clients send JSON
     const json = await req.json().catch(() => null);
-    if (json) {
+    if (json && typeof json === "object") {
       body = new URLSearchParams(json as Record<string, string>);
     }
   }
 
-  if (!body) {
-    return NextResponse.json(
-      { error: "invalid_request", error_description: "Could not parse request body" },
-      { status: 400 }
-    );
+  if (body) {
+    grantType = body.get("grant_type");
+    // Method 2 & 3: secret in body (if not already found in Basic header)
+    if (!clientSecret) {
+      clientSecret = body.get("client_secret");
+    }
   }
 
-  const grantType = body.get("grant_type");
-  if (grantType !== "client_credentials") {
+  // grant_type defaults to client_credentials if not specified
+  if (grantType && grantType !== "client_credentials") {
     return NextResponse.json(
       { error: "unsupported_grant_type" },
       { status: 400 }
     );
   }
 
-  const clientSecret = body.get("client_secret");
   if (!clientSecret) {
     return NextResponse.json(
-      { error: "invalid_client", error_description: "client_secret is required" },
+      { error: "invalid_client", error_description: "client_secret is required (set it to your TaskFlow API token)" },
       { status: 401 }
     );
   }
@@ -64,10 +83,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // The token IS the access_token — no need for a separate JWT layer
   return NextResponse.json({
     access_token: clientSecret,
     token_type: "bearer",
-    expires_in: 86400 * 365, // effectively non-expiring; the underlying API token controls access
+    expires_in: 86400 * 365,
   });
 }
