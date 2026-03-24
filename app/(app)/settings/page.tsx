@@ -6,8 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Bot, Key, User, Loader2, CheckCircle2, Eye, EyeOff, Trash2, Plus, Copy } from "lucide-react";
+import { Bot, Key, User, Loader2, CheckCircle2, Eye, EyeOff, Trash2, Plus, Copy, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
+
+interface CalendarFeed {
+  url: string;
+  name: string;
+  color: string;
+}
 
 interface UserSettings {
   id: string;
@@ -17,6 +23,8 @@ interface UserSettings {
   aiApiKey: string | null;
   aiModel: string | null;
   aiSchedulingModel: string | null;
+  calendarFeeds: CalendarFeed[];
+  dailyBudgetHours: number;
 }
 
 interface ApiToken {
@@ -58,10 +66,18 @@ export default function SettingsPage() {
   const [showKey, setShowKey] = useState(false);
 
   const [name, setName] = useState("");
+  const [dailyBudgetHours, setDailyBudgetHours] = useState(8);
   const [aiProvider, setAiProvider] = useState("anthropic");
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiModel, setAiModel] = useState("");
   const [aiSchedulingModel, setAiSchedulingModel] = useState("");
+
+  // Calendar feeds
+  const [calendarFeeds, setCalendarFeeds] = useState<CalendarFeed[]>([]);
+  const [newFeedUrl, setNewFeedUrl] = useState("");
+  const [newFeedName, setNewFeedName] = useState("");
+  const [newFeedColor, setNewFeedColor] = useState("#6366f1");
+  const [savingFeeds, setSavingFeeds] = useState(false);
 
   // API tokens
   const [tokens, setTokens] = useState<ApiToken[]>([]);
@@ -80,6 +96,8 @@ export default function SettingsPage() {
         setAiApiKey(data.aiApiKey ?? "");
         setAiModel(data.aiModel ?? (data.aiProvider === "openrouter" ? "anthropic/claude-opus-4-5" : "claude-opus-4-5"));
         setAiSchedulingModel(data.aiSchedulingModel ?? "");
+        setCalendarFeeds(data.calendarFeeds ?? []);
+        setDailyBudgetHours(data.dailyBudgetHours ?? 8);
         setLoading(false);
       });
 
@@ -108,11 +126,39 @@ export default function SettingsPage() {
     const res = await fetch("/api/user/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, dailyBudgetHours }),
     });
     setSaving(false);
     if (res.ok) toast.success("Profile saved");
     else toast.error("Failed to save profile");
+  }
+
+  async function addCalendarFeed() {
+    if (!newFeedUrl.trim() || !newFeedName.trim()) return;
+    const updated = [...calendarFeeds, { url: newFeedUrl.trim(), name: newFeedName.trim(), color: newFeedColor }];
+    setCalendarFeeds(updated);
+    setNewFeedUrl("");
+    setNewFeedName("");
+    setNewFeedColor("#6366f1");
+    await saveCalendarFeeds(updated);
+  }
+
+  async function removeCalendarFeed(index: number) {
+    const updated = calendarFeeds.filter((_, i) => i !== index);
+    setCalendarFeeds(updated);
+    await saveCalendarFeeds(updated);
+  }
+
+  async function saveCalendarFeeds(feeds: CalendarFeed[]) {
+    setSavingFeeds(true);
+    const res = await fetch("/api/user/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ calendarFeeds: feeds }),
+    });
+    setSavingFeeds(false);
+    if (res.ok) toast.success("Calendar feeds saved");
+    else toast.error("Failed to save calendar feeds");
   }
 
   async function testConnection() {
@@ -182,6 +228,9 @@ export default function SettingsPage() {
         <TabsList className="bg-muted/50 border border-border/60 h-8 p-0.5 gap-0.5">
           <TabsTrigger value="ai" className="flex-1 h-7 gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-none">
             <Bot className="h-3.5 w-3.5" />AI
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="flex-1 h-7 gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-none">
+            <CalendarDays className="h-3.5 w-3.5" />Calendar
           </TabsTrigger>
           <TabsTrigger value="api" className="flex-1 h-7 gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-none">
             <Key className="h-3.5 w-3.5" />API
@@ -288,6 +337,105 @@ export default function SettingsPage() {
                 Save
               </Button>
             </div>
+          </Section>
+        </TabsContent>
+
+        {/* Calendar */}
+        <TabsContent value="calendar" className="mt-4 space-y-4">
+          <Section
+            title="Calendar Feeds"
+            description="Paste iCal feed URLs from Google Calendar (or any .ics source) to show your events alongside tasks."
+          >
+            <FieldRow
+              label="How to get your Google Calendar iCal URL"
+              hint={
+                <span>
+                  Google Calendar → Settings → select a calendar → "Secret address in iCal format". Copy the URL and paste it below.
+                </span>
+              }
+            >
+              <div />
+            </FieldRow>
+
+            <Separator className="opacity-50" />
+
+            {/* Add new feed */}
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Calendar name (e.g. Work, Personal)"
+                  value={newFeedName}
+                  onChange={(e) => setNewFeedName(e.target.value)}
+                  className="bg-muted/40 border-border/60 h-9 focus-visible:ring-0 focus-visible:border-primary/60 flex-1"
+                />
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <label className="text-xs text-muted-foreground">Color</label>
+                  <input
+                    type="color"
+                    value={newFeedColor}
+                    onChange={(e) => setNewFeedColor(e.target.value)}
+                    className="h-8 w-10 rounded border border-border/60 bg-transparent cursor-pointer p-0.5"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
+                  value={newFeedUrl}
+                  onChange={(e) => setNewFeedUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") addCalendarFeed(); }}
+                  className="bg-muted/40 border-border/60 h-9 focus-visible:ring-0 focus-visible:border-primary/60 flex-1 font-mono text-xs"
+                />
+                <Button
+                  size="sm"
+                  className="h-9 text-xs shrink-0"
+                  onClick={addCalendarFeed}
+                  disabled={savingFeeds || !newFeedUrl.trim() || !newFeedName.trim()}
+                >
+                  {savingFeeds
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Plus className="h-3.5 w-3.5" />
+                  }
+                  <span className="ml-1.5">Add</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Feed list */}
+            {calendarFeeds.length === 0 ? (
+              <p className="text-xs text-muted-foreground/60 text-center py-3">No calendar feeds added yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {calendarFeeds.map((feed, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 border border-border/40"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className="h-3 w-3 rounded-full shrink-0"
+                        style={{ backgroundColor: feed.color }}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium">{feed.name}</p>
+                        <p className="text-[11px] text-muted-foreground/60 font-mono truncate max-w-xs">
+                          {feed.url}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0 ml-2"
+                      onClick={() => removeCalendarFeed(i)}
+                      title="Remove feed"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </Section>
         </TabsContent>
 
@@ -421,6 +569,16 @@ export default function SettingsPage() {
                   onChange={(e) => setName(e.target.value)}
                   className="bg-muted/40 border-border/60 h-9 focus-visible:ring-0 focus-visible:border-primary/60"
                   data-testid="profile-name-input"
+                />
+              </FieldRow>
+              <FieldRow label="Daily work budget (hours)" hint="Controls the time budget indicator on the Today view.">
+                <Input
+                  type="number"
+                  min={1}
+                  max={24}
+                  value={dailyBudgetHours}
+                  onChange={(e) => setDailyBudgetHours(Math.max(1, Math.min(24, parseInt(e.target.value) || 8)))}
+                  className="bg-muted/40 border-border/60 h-9 focus-visible:ring-0 focus-visible:border-primary/60 w-24"
                 />
               </FieldRow>
               <FieldRow label="Email" hint="Email cannot be changed.">

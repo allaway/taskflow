@@ -18,6 +18,9 @@ export async function GET() {
       aiApiKey: true,
       aiModel: true,
       aiSchedulingModel: true,
+      calendarFeeds: true,
+      dailyBudgetHours: true,
+      labelPalette: true,
     },
   });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -27,6 +30,8 @@ export async function GET() {
   return NextResponse.json({
     ...user,
     aiApiKey: decryptedApiKey ? maskSecret(decryptedApiKey) : null,
+    calendarFeeds: user.calendarFeeds ? JSON.parse(user.calendarFeeds) : [],
+    labelPalette: user.labelPalette ? JSON.parse(user.labelPalette) : [],
   });
 }
 
@@ -47,6 +52,16 @@ export async function PATCH(req: NextRequest) {
   if (parsed.data.aiModel !== undefined) updates.aiModel = parsed.data.aiModel || null;
   if (parsed.data.aiSchedulingModel !== undefined) updates.aiSchedulingModel = parsed.data.aiSchedulingModel || null;
 
+  if (parsed.data.calendarFeeds !== undefined) {
+    updates.calendarFeeds = JSON.stringify(parsed.data.calendarFeeds);
+  }
+  if (parsed.data.dailyBudgetHours !== undefined) {
+    (updates as Record<string, unknown>).dailyBudgetHours = parsed.data.dailyBudgetHours;
+  }
+  if (parsed.data.labelPalette !== undefined) {
+    updates.labelPalette = JSON.stringify(parsed.data.labelPalette);
+  }
+
   if (parsed.data.aiApiKey !== undefined && parsed.data.aiApiKey) {
     const existing = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -63,8 +78,12 @@ export async function PATCH(req: NextRequest) {
   const user = await prisma.user.update({
     where: { id: session.user.id },
     data: updates,
-    select: { id: true, name: true, email: true, aiProvider: true, aiModel: true, aiSchedulingModel: true },
+    select: { id: true, name: true, email: true, aiProvider: true, aiModel: true, aiSchedulingModel: true, calendarFeeds: true, dailyBudgetHours: true, labelPalette: true },
   });
 
-  return NextResponse.json(user);
+  return NextResponse.json({
+    ...user,
+    calendarFeeds: user.calendarFeeds ? JSON.parse(user.calendarFeeds) : [],
+    labelPalette: user.labelPalette ? JSON.parse(user.labelPalette) : [],
+  });
 }

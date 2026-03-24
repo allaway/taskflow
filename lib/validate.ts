@@ -32,6 +32,7 @@ export const UpdateTaskSchema = z.object({
     .nullable(),
   duration: z.number().int().min(5).max(480).optional().nullable(),
   recurringRule: z.string().max(100).optional().nullable(),
+  labels: z.array(z.string().min(1).max(50)).optional().nullable(),
 });
 
 export const WebhookTaskSchema = z.object({
@@ -71,13 +72,24 @@ export const LoginSchema = z.object({
   password: z.string().min(1),
 });
 
+export const CalendarFeedSchema = z.object({
+  url: z.string().url().max(2000),
+  name: z.string().min(1).max(100),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#6366f1"),
+});
+
 export const UserSettingsSchema = z.object({
   name: z.string().max(100).optional(),
   aiProvider: z.enum(["anthropic", "openrouter"]).optional(),
   aiApiKey: z.string().max(500).optional(),
   aiModel: z.string().max(200).optional(),
   aiSchedulingModel: z.string().max(200).optional(),
+  calendarFeeds: z.array(CalendarFeedSchema).optional(),
+  dailyBudgetHours: z.number().int().min(1).max(24).optional(),
+  labelPalette: z.array(z.object({ name: z.string().min(1).max(50), color: z.string().regex(/^#[0-9a-fA-F]{6}$/) })).optional(),
 });
+
+export type CalendarFeed = z.infer<typeof CalendarFeedSchema>;
 
 export type CreateTaskInput = z.infer<typeof CreateTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof UpdateTaskSchema>;

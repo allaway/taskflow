@@ -3,12 +3,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { CalendarDays, Inbox, LayoutGrid, Settings, LogOut, Zap } from "lucide-react";
+import { CalendarDays, Inbox, LayoutGrid, Settings, LogOut, Zap, BarChart2 } from "lucide-react";
 
 const navItems = [
-  { href: "/today", label: "Today", icon: CalendarDays },
-  { href: "/week",  label: "Week",  icon: LayoutGrid },
-  { href: "/inbox", label: "Inbox", icon: Inbox },
+  { href: "/today",  label: "Today",  icon: CalendarDays },
+  { href: "/week",   label: "Week",   icon: LayoutGrid },
+  { href: "/inbox",  label: "Inbox",  icon: Inbox },
+  { href: "/review", label: "Review", icon: BarChart2 },
 ];
 
 export function Sidebar() {

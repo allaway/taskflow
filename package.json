@@ -40,6 +40,7 @@
     "next-auth": "^5.0.0-beta.30",
     "next-themes": "^0.4.6",
     "node-cron": "^4.2.1",
+    "node-ical": "^0.25.6",
     "openai": "^6.29.0",
     "prisma": "^6.19.2",
     "rate-limiter-flexible": "^9.1.1",

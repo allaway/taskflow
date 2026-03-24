@@ -6,7 +6,7 @@ import { MoreHorizontal, Trash2, Wand2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Task } from "@prisma/client";
 import { GeneratePromptModal } from "@/components/ai/GeneratePromptModal";
-import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
+import { TaskEditModal } from "@/components/tasks/TaskEditModal";
 
 interface TaskCardProps {
   task: Task;
@@ -88,6 +88,17 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
             </p>
           )}
 
+          {/* Label chips */}
+          {(task as Task & { labels?: string | null }).labels && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {(JSON.parse((task as Task & { labels: string }).labels) as string[]).map((label: string) => (
+                <span key={label} className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary/80 font-medium">
+                  {label}
+                </span>
+              ))}
+            </div>
+          )}
+
           {(src || (showTime && task.startTime)) && (
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               {src && (
@@ -149,10 +160,12 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
         taskId={task.id}
         taskTitle={task.title}
       />
-      <TaskDetailModal
+      <TaskEditModal
         task={task}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
       />
     </>
   );

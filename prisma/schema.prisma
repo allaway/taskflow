@@ -21,6 +21,15 @@ model User {
   aiModel          String?
   aiSchedulingModel String?
 
+  // Calendar feeds — JSON array of {url, name, color}
+  calendarFeeds    String?  // JSON
+
+  // Daily work budget in hours (default 8)
+  dailyBudgetHours Int     @default(8)
+
+  // Label palette — JSON array of {name, color}
+  labelPalette     String?  // JSON
+
   tasks            Task[]
   apiTokens        ApiToken[]
 }
@@ -40,6 +49,7 @@ model Task {
 
   recurringRule String?    // cron expression e.g. "0 9 * * 1" (Mon 9am)
   externalId    String?    // for deduplication from integrations
+  labels        String?    // JSON array of label names
 
   userId        String
   user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
