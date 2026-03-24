@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Bot, Webhook, User, Loader2, CheckCircle2, Eye, EyeOff, RefreshCw } from "lucide-react";
+import { Bot, Key, User, Loader2, CheckCircle2, Eye, EyeOff, Trash2, Plus, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 interface UserSettings {
@@ -17,8 +17,14 @@ interface UserSettings {
   aiApiKey: string | null;
   aiModel: string | null;
   aiSchedulingModel: string | null;
-  n8nWebhookSecret: string | null;
-  n8nOutboundUrl: string | null;
+}
+
+interface ApiToken {
+  id: string;
+  name: string;
+  tokenPrefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
 }
 
 function FieldRow({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
@@ -50,15 +56,19 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [showKey, setShowKey] = useState(false);
-  const [generating, setGenerating] = useState(false);
 
   const [name, setName] = useState("");
   const [aiProvider, setAiProvider] = useState("anthropic");
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiModel, setAiModel] = useState("");
   const [aiSchedulingModel, setAiSchedulingModel] = useState("");
-  const [n8nSecret, setN8nSecret] = useState("");
-  const [n8nOutboundUrl, setN8nOutboundUrl] = useState("");
+
+  // API tokens
+  const [tokens, setTokens] = useState<ApiToken[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(true);
+  const [newTokenName, setNewTokenName] = useState("");
+  const [creatingToken, setCreatingToken] = useState(false);
+  const [revealedToken, setRevealedToken] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/user/settings")
@@ -70,9 +80,14 @@ export default function SettingsPage() {
         setAiApiKey(data.aiApiKey ?? "");
         setAiModel(data.aiModel ?? (data.aiProvider === "openrouter" ? "anthropic/claude-opus-4-5" : "claude-opus-4-5"));
         setAiSchedulingModel(data.aiSchedulingModel ?? "");
-        setN8nSecret(data.n8nWebhookSecret ?? "");
-        setN8nOutboundUrl(data.n8nOutboundUrl ?? "");
         setLoading(false);
+      });
+
+    fetch("/api/tokens")
+      .then((r) => r.json())
+      .then((data) => {
+        setTokens(data);
+        setTokensLoading(false);
       });
   }, []);
 
@@ -100,18 +115,6 @@ export default function SettingsPage() {
     else toast.error("Failed to save profile");
   }
 
-  async function saveN8nSettings() {
-    setSaving(true);
-    const res = await fetch("/api/user/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ n8nWebhookSecret: n8nSecret || undefined, n8nOutboundUrl: n8nOutboundUrl || undefined }),
-    });
-    setSaving(false);
-    if (res.ok) toast.success("N8N settings saved");
-    else toast.error("Failed to save N8N settings");
-  }
-
   async function testConnection() {
     if (!aiApiKey || aiApiKey.includes("...")) {
       toast.error("Enter a full API key to test");
@@ -129,12 +132,35 @@ export default function SettingsPage() {
     else toast.error("Connection failed. Check your API key and model.");
   }
 
-  async function generateWebhookSecret() {
-    setGenerating(true);
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    setN8nSecret(Array.from(array, (b) => b.toString(16).padStart(2, "0")).join(""));
-    setGenerating(false);
+  async function createToken() {
+    if (!newTokenName.trim()) return;
+    setCreatingToken(true);
+    const res = await fetch("/api/tokens", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newTokenName.trim() }),
+    });
+    setCreatingToken(false);
+    if (!res.ok) { toast.error("Failed to create token"); return; }
+    const data = await res.json();
+    setTokens((prev) => [data, ...prev]);
+    setRevealedToken(data.token);
+    setNewTokenName("");
+  }
+
+  async function revokeToken(id: string) {
+    const res = await fetch(`/api/tokens/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setTokens((prev) => prev.filter((t) => t.id !== id));
+      toast.success("Token revoked");
+    } else {
+      toast.error("Failed to revoke token");
+    }
+  }
+
+  function copyToken(token: string) {
+    navigator.clipboard.writeText(token);
+    toast.success("Copied to clipboard");
   }
 
   const defaultModel = aiProvider === "openrouter" ? "anthropic/claude-opus-4-5" : "claude-opus-4-5";
@@ -157,8 +183,8 @@ export default function SettingsPage() {
           <TabsTrigger value="ai" className="flex-1 h-7 gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-none">
             <Bot className="h-3.5 w-3.5" />AI
           </TabsTrigger>
-          <TabsTrigger value="n8n" className="flex-1 h-7 gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-none">
-            <Webhook className="h-3.5 w-3.5" />N8N
+          <TabsTrigger value="api" className="flex-1 h-7 gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-none">
+            <Key className="h-3.5 w-3.5" />API
           </TabsTrigger>
           <TabsTrigger value="profile" className="flex-1 h-7 gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-none">
             <User className="h-3.5 w-3.5" />Profile
@@ -265,66 +291,123 @@ export default function SettingsPage() {
           </Section>
         </TabsContent>
 
-        {/* N8N */}
-        <TabsContent value="n8n" className="mt-4 space-y-4">
-          <Section title="N8N Integration" description="Connect N8N workflows to send and receive tasks.">
-            <div className="space-y-3">
-              <FieldRow
-                label="Inbound webhook secret"
-                hint={
-                  <span>
-                    Webhook URL: <code className="bg-muted/60 px-1 py-0.5 rounded text-[10px]">{origin}/api/webhooks/n8n</code>
-                    <br />Set <code className="bg-muted/60 px-1 py-0.5 rounded text-[10px]">Authorization: Bearer &lt;secret&gt;</code> in your N8N HTTP node.
-                  </span>
-                }
-              >
+        {/* API Tokens */}
+        <TabsContent value="api" className="mt-4 space-y-4">
+          <Section title="API Tokens" description="Use tokens to push tasks from any external service.">
+            <FieldRow
+              label="Inbound endpoint"
+              hint="POST tasks here with Authorization: Bearer <token>"
+            >
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={`${origin}/api/webhooks`}
+                  className="bg-muted/40 border-border/60 h-9 text-muted-foreground font-mono text-xs focus-visible:ring-0"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 border-border/60 bg-transparent shrink-0"
+                  onClick={() => copyToken(`${origin}/api/webhooks`)}
+                  title="Copy URL"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </FieldRow>
+
+            <Separator className="opacity-50" />
+
+            {/* New token revealed */}
+            {revealedToken && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-amber-400">Copy this token now — it won&apos;t be shown again.</p>
                 <div className="flex gap-2">
                   <Input
-                    type="password"
-                    placeholder="Your webhook bearer token"
-                    value={n8nSecret}
-                    onChange={(e) => setN8nSecret(e.target.value)}
-                    className="bg-muted/40 border-border/60 h-9 focus-visible:ring-0 focus-visible:border-primary/60"
-                    data-testid="n8n-secret-input"
+                    readOnly
+                    value={revealedToken}
+                    className="bg-muted/40 border-amber-500/40 h-9 font-mono text-xs focus-visible:ring-0"
                   />
                   <Button
                     variant="outline"
                     size="icon"
                     className="h-9 w-9 border-border/60 bg-transparent shrink-0"
-                    onClick={generateWebhookSecret}
-                    disabled={generating}
-                    title="Generate random secret"
+                    onClick={() => copyToken(revealedToken)}
+                    title="Copy token"
                   >
-                    <RefreshCw className={`h-3.5 w-3.5 ${generating ? "animate-spin" : ""}`} />
+                    <Copy className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-              </FieldRow>
+                <button
+                  className="text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                  onClick={() => setRevealedToken(null)}
+                >
+                  I&apos;ve saved it — dismiss
+                </button>
+              </div>
+            )}
 
-              <FieldRow
-                label="Outbound webhook URL"
-                hint="Used when you click &quot;Send to N8N&quot; on a task card. Optional."
+            {/* Create new token */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="Token name (e.g. n8n, Zapier, IFTTT)"
+                value={newTokenName}
+                onChange={(e) => setNewTokenName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") createToken(); }}
+                className="bg-muted/40 border-border/60 h-9 focus-visible:ring-0 focus-visible:border-primary/60"
+              />
+              <Button
+                size="sm"
+                className="h-9 text-xs shrink-0"
+                onClick={createToken}
+                disabled={creatingToken || !newTokenName.trim()}
               >
-                <Input
-                  type="url"
-                  placeholder="https://your-n8n.instance/webhook/..."
-                  value={n8nOutboundUrl}
-                  onChange={(e) => setN8nOutboundUrl(e.target.value)}
-                  className="bg-muted/40 border-border/60 h-9 focus-visible:ring-0 focus-visible:border-primary/60"
-                  data-testid="n8n-outbound-url-input"
-                />
-              </FieldRow>
+                {creatingToken
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Plus className="h-3.5 w-3.5" />
+                }
+                <span className="ml-1.5">Create</span>
+              </Button>
             </div>
 
-            <Button
-              size="sm"
-              className="h-8 text-xs"
-              onClick={saveN8nSettings}
-              disabled={saving}
-              data-testid="save-n8n-settings-btn"
-            >
-              {saving && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-              Save
-            </Button>
+            {/* Token list */}
+            {tokensLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : tokens.length === 0 ? (
+              <p className="text-xs text-muted-foreground/60 text-center py-3">No tokens yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {tokens.map((token) => (
+                  <div
+                    key={token.id}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 border border-border/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium truncate">{token.name}</p>
+                      <p className="text-[11px] text-muted-foreground/60 font-mono">
+                        {token.tokenPrefix}
+                        {token.lastUsedAt && (
+                          <span className="ml-2 not-italic">
+                            last used {new Date(token.lastUsedAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0 ml-2"
+                      onClick={() => revokeToken(token.id)}
+                      title="Revoke token"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </Section>
         </TabsContent>
 

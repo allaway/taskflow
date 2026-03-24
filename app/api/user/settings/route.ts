@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { UserSettingsSchema } from "@/lib/validate";
-import { encryptNullable, decryptNullable, maskSecret } from "@/lib/crypto";
+import { decryptNullable, maskSecret, encryptNullable } from "@/lib/crypto";
 
 export async function GET() {
   const session = await auth();
@@ -14,8 +14,6 @@ export async function GET() {
       id: true,
       name: true,
       email: true,
-      n8nWebhookSecret: true,
-      n8nOutboundUrl: true,
       aiProvider: true,
       aiApiKey: true,
       aiModel: true,
@@ -24,14 +22,10 @@ export async function GET() {
   });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const decryptedSecret = decryptNullable(user.n8nWebhookSecret);
   const decryptedApiKey = decryptNullable(user.aiApiKey);
-  const decryptedOutboundUrl = decryptNullable(user.n8nOutboundUrl);
 
   return NextResponse.json({
     ...user,
-    n8nWebhookSecret: decryptedSecret ? maskSecret(decryptedSecret) : null,
-    n8nOutboundUrl: decryptedOutboundUrl,
     aiApiKey: decryptedApiKey ? maskSecret(decryptedApiKey) : null,
   });
 }
@@ -53,28 +47,16 @@ export async function PATCH(req: NextRequest) {
   if (parsed.data.aiModel !== undefined) updates.aiModel = parsed.data.aiModel || null;
   if (parsed.data.aiSchedulingModel !== undefined) updates.aiSchedulingModel = parsed.data.aiSchedulingModel || null;
 
-  if (parsed.data.n8nWebhookSecret !== undefined) {
-    updates.n8nWebhookSecret = parsed.data.n8nWebhookSecret
-      ? encryptNullable(parsed.data.n8nWebhookSecret)
-      : null;
-  }
-  if (parsed.data.n8nOutboundUrl !== undefined) {
-    updates.n8nOutboundUrl = parsed.data.n8nOutboundUrl
-      ? encryptNullable(parsed.data.n8nOutboundUrl)
-      : null;
-  }
   if (parsed.data.aiApiKey !== undefined && parsed.data.aiApiKey) {
     const existing = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { aiApiKey: true },
     });
-    const currentDecrypted = decryptNullable(existing?.aiApiKey);
     const isMasked = parsed.data.aiApiKey.includes("...");
     if (!isMasked) {
       updates.aiApiKey = encryptNullable(parsed.data.aiApiKey);
     } else {
       updates.aiApiKey = existing?.aiApiKey ?? null;
-      void currentDecrypted;
     }
   }
 

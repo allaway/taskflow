@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { N8NWebhookSchema } from "@/lib/validate";
-import { decrypt } from "@/lib/crypto";
+import { hashToken } from "@/lib/tokens";
+import { WebhookTaskSchema } from "@/lib/validate";
 import { rateLimit, getClientIp } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
@@ -12,32 +12,26 @@ export async function POST(req: NextRequest) {
   if (!authHeader?.startsWith("Bearer ")) {
     return NextResponse.json({ error: "Missing or invalid Authorization header" }, { status: 401 });
   }
-  const providedSecret = authHeader.slice(7);
+  const providedToken = authHeader.slice(7);
+  const tokenHash = hashToken(providedToken);
 
-  const users = await prisma.user.findMany({
-    where: { n8nWebhookSecret: { not: null } },
-    select: { id: true, n8nWebhookSecret: true },
+  const apiToken = await prisma.apiToken.findUnique({
+    where: { tokenHash },
+    select: { id: true, userId: true },
   });
 
-  let matchedUserId: string | null = null;
-  for (const u of users) {
-    try {
-      const decrypted = decrypt(u.n8nWebhookSecret!);
-      if (decrypted === providedSecret) {
-        matchedUserId = u.id;
-        break;
-      }
-    } catch {
-      continue;
-    }
+  if (!apiToken) {
+    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
-  if (!matchedUserId) {
-    return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401 });
-  }
+  // Update lastUsedAt async (don't await — don't block the request)
+  void prisma.apiToken.update({
+    where: { id: apiToken.id },
+    data: { lastUsedAt: new Date() },
+  });
 
   const body = await req.json().catch(() => null);
-  const parsed = N8NWebhookSchema.safeParse(body);
+  const parsed = WebhookTaskSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
@@ -47,8 +41,8 @@ export async function POST(req: NextRequest) {
   const task = await prisma.task.upsert({
     where: {
       userId_externalId: {
-        userId: matchedUserId,
-        externalId: externalId ?? `n8n-${Date.now()}`,
+        userId: apiToken.userId,
+        externalId: externalId ?? `api-${Date.now()}`,
       },
     },
     update: {
@@ -59,9 +53,9 @@ export async function POST(req: NextRequest) {
     },
     create: {
       ...taskData,
-      externalId: externalId ?? `n8n-${Date.now()}`,
-      source: "N8N",
-      userId: matchedUserId,
+      externalId: externalId ?? `api-${Date.now()}`,
+      source: "API",
+      userId: apiToken.userId,
       scheduledDate: taskData.scheduledDate ? new Date(taskData.scheduledDate) : undefined,
       status: taskData.scheduledDate ? "SCHEDULED" : "INBOX",
     },

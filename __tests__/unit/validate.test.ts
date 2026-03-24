@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   CreateTaskSchema,
-  N8NWebhookSchema,
+  WebhookTaskSchema,
   UserSettingsSchema,
   LoginSchema,
 } from "@/lib/validate";
@@ -38,19 +38,19 @@ describe("CreateTaskSchema", () => {
   });
 });
 
-describe("N8NWebhookSchema", () => {
+describe("WebhookTaskSchema", () => {
   it("accepts minimal valid payload", () => {
-    const result = N8NWebhookSchema.safeParse({ title: "New ticket" });
+    const result = WebhookTaskSchema.safeParse({ title: "New ticket" });
     expect(result.success).toBe(true);
   });
 
   it("rejects oversized description", () => {
-    const result = N8NWebhookSchema.safeParse({ title: "Task", description: "x".repeat(5001) });
+    const result = WebhookTaskSchema.safeParse({ title: "Task", description: "x".repeat(5001) });
     expect(result.success).toBe(false);
   });
 
   it("accepts payload with externalId", () => {
-    const result = N8NWebhookSchema.safeParse({ title: "Task", externalId: "notion-abc123" });
+    const result = WebhookTaskSchema.safeParse({ title: "Task", externalId: "notion-abc123" });
     expect(result.success).toBe(true);
   });
 });
@@ -64,16 +64,6 @@ describe("UserSettingsSchema", () => {
   it("rejects invalid provider", () => {
     const result = UserSettingsSchema.safeParse({ aiProvider: "google" });
     expect(result.success).toBe(false);
-  });
-
-  it("rejects invalid outbound URL", () => {
-    const result = UserSettingsSchema.safeParse({ n8nOutboundUrl: "not-a-url" });
-    expect(result.success).toBe(false);
-  });
-
-  it("accepts empty string for outbound URL (clear)", () => {
-    const result = UserSettingsSchema.safeParse({ n8nOutboundUrl: "" });
-    expect(result.success).toBe(true);
   });
 });
 

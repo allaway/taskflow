@@ -15,10 +15,6 @@ model User {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  // N8N integration (encrypted)
-  n8nWebhookSecret String?
-  n8nOutboundUrl   String?
-
   // AI provider config (encrypted)
   aiProvider       String?  // "anthropic" | "openrouter"
   aiApiKey         String?  // AES-256-GCM encrypted
@@ -26,6 +22,7 @@ model User {
   aiSchedulingModel String?
 
   tasks            Task[]
+  apiTokens        ApiToken[]
 }
 
 model Task {
@@ -71,6 +68,19 @@ enum Priority {
 
 enum TaskSource {
   MANUAL
-  N8N
+  API
   RECURRING
+}
+
+model ApiToken {
+  id          String    @id @default(cuid())
+  name        String
+  tokenHash   String    @unique
+  tokenPrefix String
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+
+  @@index([userId])
 }

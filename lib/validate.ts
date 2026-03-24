@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const TaskStatusEnum = z.enum(["INBOX", "SCHEDULED", "COMPLETED", "CANCELLED"]);
 export const PriorityEnum = z.enum(["LOW", "MEDIUM", "HIGH"]);
-export const TaskSourceEnum = z.enum(["MANUAL", "N8N", "RECURRING"]);
+export const TaskSourceEnum = z.enum(["MANUAL", "API", "RECURRING"]);
 
 export const CreateTaskSchema = z.object({
   title: z.string().min(1, "Title is required").max(500),
@@ -34,7 +34,7 @@ export const UpdateTaskSchema = z.object({
   recurringRule: z.string().max(100).optional().nullable(),
 });
 
-export const N8NWebhookSchema = z.object({
+export const WebhookTaskSchema = z.object({
   title: z.string().min(1).max(500),
   description: z.string().max(5000).optional(),
   notes: z.string().max(10000).optional(),
@@ -73,8 +73,6 @@ export const LoginSchema = z.object({
 
 export const UserSettingsSchema = z.object({
   name: z.string().max(100).optional(),
-  n8nWebhookSecret: z.string().max(500).optional(),
-  n8nOutboundUrl: z.string().url().max(2048).optional().or(z.literal("")),
   aiProvider: z.enum(["anthropic", "openrouter"]).optional(),
   aiApiKey: z.string().max(500).optional(),
   aiModel: z.string().max(200).optional(),
@@ -83,5 +81,5 @@ export const UserSettingsSchema = z.object({
 
 export type CreateTaskInput = z.infer<typeof CreateTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof UpdateTaskSchema>;
-export type N8NWebhookInput = z.infer<typeof N8NWebhookSchema>;
+export type WebhookTaskInput = z.infer<typeof WebhookTaskSchema>;
 export type UserSettingsInput = z.infer<typeof UserSettingsSchema>;

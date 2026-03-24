@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Trash2, Wand2, Send, Clock } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { MoreHorizontal, Trash2, Wand2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Task } from "@prisma/client";
 import { GeneratePromptModal } from "@/components/ai/GeneratePromptModal";
@@ -23,7 +23,7 @@ const priorityAccent = {
 };
 
 const sourceLabel = {
-  N8N:       { text: "N8N",       cls: "text-violet-400 bg-violet-500/10" },
+  API:       { text: "api",       cls: "text-violet-400 bg-violet-500/10" },
   RECURRING: { text: "recurring", cls: "text-sky-400 bg-sky-500/10" },
   MANUAL:    null,
 };
@@ -34,12 +34,6 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
 
   async function toggleComplete() {
     await onUpdate(task.id, { status: done ? "INBOX" : "COMPLETED" });
-  }
-
-  async function sendToN8N() {
-    const res = await fetch(`/api/tasks/${task.id}/send-n8n`, { method: "POST" });
-    if (res.ok) toast.success("Sent to N8N workflow");
-    else { const d = await res.json(); toast.error(d.error ?? "Failed to send to N8N"); }
   }
 
   const src = sourceLabel[task.source];
@@ -136,11 +130,6 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
               <MoreHorizontal className="h-3.5 w-3.5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={sendToN8N}>
-                <Send className="h-3.5 w-3.5 mr-2 opacity-60" />
-                Send to N8N
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
                 onClick={() => onDelete(task.id)}
