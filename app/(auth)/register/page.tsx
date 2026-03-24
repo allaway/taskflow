@@ -17,19 +17,24 @@ export default function RegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
-    });
-    setLoading(false);
-    if (!res.ok) {
-      const data = await res.json();
-      toast.error(data.error?.message ?? data.error ?? "Registration failed");
-      return;
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error?.message ?? data.error ?? "Registration failed");
+        return;
+      }
+      toast.success("Account created! Please sign in.");
+      router.push("/login");
+    } catch {
+      toast.error("Could not connect to server. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    toast.success("Account created! Please sign in.");
-    router.push("/login");
   }
 
   return (

@@ -20,10 +20,15 @@ function LoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const result = await signIn("credentials", { email, password, redirect: false });
-    setLoading(false);
-    if (result?.error) toast.error("Invalid email or password");
-    else router.push(callbackUrl);
+    try {
+      const result = await signIn("credentials", { email, password, redirect: false });
+      if (result?.error) toast.error("Invalid email or password");
+      else router.push(callbackUrl);
+    } catch {
+      toast.error("Could not connect to server. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
