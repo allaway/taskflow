@@ -187,7 +187,11 @@ export default function SettingsPage() {
       body: JSON.stringify({ name: newTokenName.trim() }),
     });
     setCreatingToken(false);
-    if (!res.ok) { toast.error("Failed to create token"); return; }
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      toast.error(`Failed to create token (${res.status})${err?.error ? `: ${JSON.stringify(err.error)}` : ""}`);
+      return;
+    }
     const data = await res.json();
     setTokens((prev) => [data, ...prev]);
     setRevealedToken(data.token);
