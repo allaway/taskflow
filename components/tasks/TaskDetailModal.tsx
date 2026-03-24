@@ -1,6 +1,5 @@
 "use client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock, Tag } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
