@@ -134,8 +134,8 @@ export default function SettingsPage() {
   }
 
   async function addCalendarFeed() {
-    if (!newFeedUrl.trim() || !newFeedName.trim()) return;
-    const updated = [...calendarFeeds, { url: newFeedUrl.trim(), name: newFeedName.trim(), color: newFeedColor }];
+    if (!newFeedUrl.trim()) return;
+    const updated = [...calendarFeeds, { url: newFeedUrl.trim(), name: newFeedName.trim() || "Calendar", color: newFeedColor }];
     setCalendarFeeds(updated);
     setNewFeedUrl("");
     setNewFeedName("");
@@ -390,7 +390,7 @@ export default function SettingsPage() {
                   size="sm"
                   className="h-9 text-xs shrink-0"
                   onClick={addCalendarFeed}
-                  disabled={savingFeeds || !newFeedUrl.trim() || !newFeedName.trim()}
+                  disabled={savingFeeds || !newFeedUrl.trim()}
                 >
                   {savingFeeds
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />

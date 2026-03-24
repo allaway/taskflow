@@ -302,6 +302,7 @@ export default function TodayPage() {
   }
 
   const scheduledTasks = tasks.filter((t) => t.startTime);
+  const unscheduledDayTasks = tasks.filter((t) => !t.startTime);
   const allTasks = [...tasks, ...inboxTasks];
   const activeTask = activeTaskId ? allTasks.find((t) => t.id === activeTaskId) ?? null : null;
 
@@ -542,9 +543,27 @@ export default function TodayPage() {
               {addingTask && (
                 <TaskForm onSubmit={addTask} onCancel={() => setAddingTask(false)} defaultDate={dateStr} />
               )}
+              {/* Planned-but-untimed tasks for today */}
+              {!loading && unscheduledDayTasks.length > 0 && (
+                <>
+                  <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wide px-1 pt-1">
+                    Today — drag to schedule
+                  </p>
+                  {unscheduledDayTasks.map((task) => (
+                    <DraggableTask key={task.id} id={task.id}>
+                      <TaskCard task={task} onUpdate={updateTask} onDelete={deleteTask} />
+                    </DraggableTask>
+                  ))}
+                  {inboxTasks.length > 0 && (
+                    <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wide px-1 pt-2">
+                      Inbox
+                    </p>
+                  )}
+                </>
+              )}
               {loading ? (
                 [1, 2, 3].map((i) => <div key={i} className="h-12 rounded-lg bg-muted/60 animate-pulse" />)
-              ) : inboxTasks.length === 0 && !addingTask ? (
+              ) : inboxTasks.length === 0 && !addingTask && unscheduledDayTasks.length === 0 ? (
                 <div className="py-8 text-center">
                   <p className="text-xs text-muted-foreground">Inbox is clear</p>
                 </div>
