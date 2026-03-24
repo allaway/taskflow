@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,11 @@ export function ShutdownModal({ open, onOpenChange, date, tasks, onDone }: Shutd
   const incomplete = tasks.filter((t) => t.status !== "COMPLETED" && t.status !== "CANCELLED");
   const [dispositions, setDispositions] = useState<Record<string, Disposition>>({});
   const [applying, setApplying] = useState(false);
+
+  // Reset dispositions whenever the modal opens so stale choices don't persist
+  useEffect(() => {
+    if (open) setDispositions({});
+  }, [open]);
 
   function setAll(d: Disposition) {
     const next: Record<string, Disposition> = {};

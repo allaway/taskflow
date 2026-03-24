@@ -53,7 +53,11 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
       setScheduledDate(task.scheduledDate ? format(new Date(task.scheduledDate), "yyyy-MM-dd") : "");
       setStartTime(task.startTime ?? "");
       setDuration(task.duration?.toString() ?? "");
-      setLabels((task as Task & { labels?: string }).labels ? JSON.parse((task as Task & { labels: string }).labels) : []);
+      try {
+        const raw = (task as Task & { labels?: string }).labels;
+        const parsed = raw ? JSON.parse(raw) : [];
+        setLabels(Array.isArray(parsed) ? parsed : []);
+      } catch { setLabels([]); }
     }
   }, [task]);
 

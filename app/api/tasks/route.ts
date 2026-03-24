@@ -15,7 +15,11 @@ export async function GET(req: NextRequest) {
 
   const where: Record<string, unknown> = { userId: session.user.id };
   if (status) where.status = status;
-  if (date) where.scheduledDate = { gte: new Date(date + "T00:00:00Z"), lt: new Date(date + "T23:59:59Z") };
+  if (date) {
+    const dayStart = new Date(date + "T00:00:00.000Z");
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    where.scheduledDate = { gte: dayStart, lt: dayEnd };
+  }
   if (source) where.source = source;
 
   const tasks = await prisma.task.findMany({

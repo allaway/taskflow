@@ -34,7 +34,7 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
   const done = task.status === "COMPLETED";
 
   async function toggleComplete() {
-    await onUpdate(task.id, { status: done ? "INBOX" : "COMPLETED" });
+    await onUpdate(task.id, { status: done ? (task.scheduledDate ? "SCHEDULED" : "INBOX") : "COMPLETED" });
   }
 
   const src = sourceLabel[task.source];
@@ -89,15 +89,21 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
           )}
 
           {/* Label chips */}
-          {(task as Task & { labels?: string | null }).labels && (
-            <div className="flex flex-wrap gap-1 mt-1">
-              {(JSON.parse((task as Task & { labels: string }).labels) as string[]).map((label: string) => (
-                <span key={label} className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary/80 font-medium">
-                  {label}
-                </span>
-              ))}
-            </div>
-          )}
+          {(task as Task & { labels?: string | null }).labels && (() => {
+            try {
+              const parsed = JSON.parse((task as Task & { labels: string }).labels) as string[];
+              if (!Array.isArray(parsed) || parsed.length === 0) return null;
+              return (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {parsed.map((label: string) => (
+                    <span key={label} className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary/80 font-medium">
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              );
+            } catch { return null; }
+          })()}
 
           {(src || (showTime && task.startTime)) && (
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">

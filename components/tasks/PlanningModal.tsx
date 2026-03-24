@@ -58,7 +58,7 @@ export function PlanningModal({ open, onOpenChange, date, onDone }: PlanningModa
         body: JSON.stringify({
           scheduledDate: startOfDay(date).toISOString(),
           status: "SCHEDULED",
-          duration: durations[task.id] ? parseInt(durations[task.id]) : task.duration ?? 30,
+          duration: durations[task.id] ? (parseInt(durations[task.id]) || 30) : task.duration ?? 30,
         }),
       })
     ));
@@ -70,7 +70,7 @@ export function PlanningModal({ open, onOpenChange, date, onDone }: PlanningModa
 
   const selectedTasks = inboxTasks.filter((t) => selected.has(t.id));
   const totalMins = selectedTasks.reduce((acc, t) => {
-    const d = durations[t.id] ? parseInt(durations[t.id]) : (t.duration ?? 30);
+    const d = durations[t.id] ? (parseInt(durations[t.id]) || 30) : (t.duration ?? 30);
     return acc + d;
   }, 0);
   const totalH = Math.floor(totalMins / 60);
