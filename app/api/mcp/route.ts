@@ -250,7 +250,7 @@ function unauthorized(req: NextRequest) {
     {
       status: 401,
       headers: {
-        "WWW-Authenticate": `Bearer realm="${origin}", resource_metadata="${origin}/.well-known/oauth-authorization-server"`,
+        "WWW-Authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"`,
       },
     }
   );
