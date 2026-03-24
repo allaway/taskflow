@@ -31,16 +31,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Registration is not open." }, { status: 403 });
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+    }
+
+    const passwordHash = await hash(password, 12);
+    const user = await prisma.user.create({
+      data: { name, email, passwordHash },
+      select: { id: true, email: true, name: true },
+    });
+
+    return NextResponse.json(user, { status: 201 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Register error:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const passwordHash = await hash(password, 12);
-  const user = await prisma.user.create({
-    data: { name, email, passwordHash },
-    select: { id: true, email: true, name: true },
-  });
-
-  return NextResponse.json(user, { status: 201 });
 }
