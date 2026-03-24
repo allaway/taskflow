@@ -6,7 +6,6 @@ import { MoreHorizontal, Trash2, Wand2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Task } from "@prisma/client";
 import { GeneratePromptModal } from "@/components/ai/GeneratePromptModal";
-import { toast } from "sonner";
 
 interface TaskCardProps {
   task: Task;
