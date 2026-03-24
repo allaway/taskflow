@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { hashToken } from "@/lib/tokens";
+import { getOrigin } from "@/lib/request-origin";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -243,7 +244,7 @@ async function handleMessage(msg: RpcMessage, userId: string) {
 // ── Route handlers ────────────────────────────────────────────────────────────
 
 function unauthorized(req: NextRequest) {
-  const origin = new URL(req.url).origin;
+  const origin = getOrigin(req);
   return NextResponse.json(
     { error: "Unauthorized" },
     {

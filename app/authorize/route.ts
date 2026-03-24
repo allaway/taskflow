@@ -18,6 +18,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { generateToken } from "@/lib/tokens";
 import { createHmac } from "crypto";
+// getOrigin imported for future use — authorize redirects use redirect_uri from the client
 
 const secret = () => process.env.NEXTAUTH_SECRET ?? "dev-secret";
 

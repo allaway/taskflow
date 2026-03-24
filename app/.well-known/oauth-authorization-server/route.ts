@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getOrigin } from "@/lib/request-origin";
 
 export async function GET(req: NextRequest) {
-  const origin = new URL(req.url).origin;
+  const origin = getOrigin(req);
   return NextResponse.json({
     issuer: origin,
     authorization_endpoint: `${origin}/authorize`,
