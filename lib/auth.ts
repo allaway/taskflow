@@ -3,10 +3,11 @@ import Credentials from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { LoginSchema } from "@/lib/validate";
+import { authConfig } from "@/lib/auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
-  trustHost: true,
   providers: [
     Credentials({
       credentials: {
@@ -28,21 +29,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  pages: {
-    signIn: "/login",
-  },
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) token.id = user.id;
-      return token;
-    },
-    async session({ session, token }) {
-      if (token.id) session.user.id = token.id as string;
-      return session;
-    },
-  },
 });
