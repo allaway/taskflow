@@ -1,0 +1,22 @@
+{
+  "name": "taskflow-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "taskflow-mcp": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx server.ts",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.10.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "@types/node": "^22.13.14"
+  }
+}
