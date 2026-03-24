@@ -242,11 +242,22 @@ async function handleMessage(msg: RpcMessage, userId: string) {
 
 // ── Route handlers ────────────────────────────────────────────────────────────
 
+function unauthorized(req: NextRequest) {
+  const origin = new URL(req.url).origin;
+  return NextResponse.json(
+    { error: "Unauthorized" },
+    {
+      status: 401,
+      headers: {
+        "WWW-Authenticate": `Bearer realm="${origin}", resource_metadata="${origin}/.well-known/oauth-authorization-server"`,
+      },
+    }
+  );
+}
+
 export async function POST(req: NextRequest) {
   const userId = await getUserId(req);
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!userId) return unauthorized(req);
 
   const body = await req.json().catch(() => null);
   if (!body) {
@@ -271,8 +282,6 @@ export async function POST(req: NextRequest) {
 // GET is required by the streamable HTTP spec (even if we don't support SSE streaming)
 export async function GET(req: NextRequest) {
   const userId = await getUserId(req);
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!userId) return unauthorized(req);
   return NextResponse.json({ error: "SSE streaming not supported; use POST" }, { status: 405 });
 }
