@@ -10,7 +10,7 @@ import type { Task } from "@prisma/client";
 const priorityColor: Record<string, string> = {
   HIGH:   "bg-rose-500",
   MEDIUM: "bg-amber-500",
-  LOW:    "bg-slate-600",
+  LOW:    "bg-slate-400",
 };
 
 export default function ReviewPage() {
@@ -220,7 +220,7 @@ export default function ReviewPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 text-muted-foreground/50 hover:text-sky-400"
+                          className="h-6 w-6 text-muted-foreground/50 hover:text-sky-600"
                           title="Defer to next week"
                           onClick={() => deferTask(task)}
                         >
@@ -229,7 +229,7 @@ export default function ReviewPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 text-muted-foreground/50 hover:text-violet-400"
+                          className="h-6 w-6 text-muted-foreground/50 hover:text-violet-600"
                           title="Back to inbox"
                           onClick={() => inboxTask(task)}
                         >

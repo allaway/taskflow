@@ -404,7 +404,7 @@ export default function TodayPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs gap-1.5 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                className="h-7 text-xs gap-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
                 onClick={() => setPlanningOpen(true)}
                 title="Start day — plan what you'll work on"
               >
@@ -424,7 +424,7 @@ export default function TodayPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs gap-1.5 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10"
+                className="h-7 text-xs gap-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-500/10"
                 onClick={() => setShutdownOpen(true)}
                 title="Finish day — review and defer incomplete tasks"
               >

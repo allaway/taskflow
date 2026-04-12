@@ -16,37 +16,34 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-56 flex flex-col shrink-0 border-r border-sidebar-border bg-sidebar">
-      {/* Logo */}
-      <div className="h-14 flex items-center px-5 border-b border-sidebar-border">
-        <div className="flex items-center gap-3">
-          <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0"
-               style={{ boxShadow: "0 0 16px -2px oklch(0.64 0.24 263 / 60%)" }}>
-            <Zap className="h-4 w-4 text-primary-foreground fill-primary-foreground" />
-          </div>
-          <span className="font-semibold text-sm text-foreground tracking-tight">TaskFlow</span>
+    <aside className="w-[220px] flex flex-col shrink-0 bg-sidebar border-r border-sidebar-border">
+      {/* Brand */}
+      <div className="flex items-center gap-3 px-5 h-14 border-b border-sidebar-border shrink-0">
+        <div className="h-7 w-7 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
+          <Zap className="h-[15px] w-[15px] text-sidebar-primary-foreground fill-sidebar-primary-foreground" />
         </div>
+        <span className="font-semibold text-[14px] tracking-tight text-sidebar-foreground">TaskFlow</span>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 pt-5 pb-3 flex flex-col gap-px">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40 px-3 mb-2">
-          Workspace
+      <nav className="flex-1 px-3 py-4 flex flex-col gap-px">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-sidebar-foreground/30 px-3 mb-2">
+          Navigation
         </p>
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "?");
           return (
             <Link key={href} href={href}>
               <div className={cn(
-                "relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150",
+                "relative flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium transition-all duration-150",
                 active
-                  ? "bg-white/[0.08] text-foreground"
-                  : "text-muted-foreground hover:text-foreground/90 hover:bg-white/[0.05]"
+                  ? "bg-sidebar-accent text-sidebar-foreground"
+                  : "text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent/60"
               )}>
                 {active && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-0.5 rounded-r bg-primary" />
+                  <span className="absolute left-0 inset-y-2 w-0.5 rounded-r-full bg-sidebar-primary" />
                 )}
-                <Icon className={cn("h-4 w-4 shrink-0", active ? "text-primary" : "")} />
+                <Icon className={cn("h-4 w-4 shrink-0", active ? "text-sidebar-primary" : "")} />
                 {label}
               </div>
             </Link>
@@ -58,13 +55,13 @@ export function Sidebar() {
       <div className="px-3 py-3 border-t border-sidebar-border flex flex-col gap-px">
         <Link href="/settings">
           <div className={cn(
-            "relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150",
+            "relative flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium transition-all duration-150",
             pathname.startsWith("/settings")
-              ? "bg-white/[0.08] text-foreground"
-              : "text-muted-foreground hover:text-foreground/90 hover:bg-white/[0.05]"
+              ? "bg-sidebar-accent text-sidebar-foreground"
+              : "text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent/60"
           )}>
             {pathname.startsWith("/settings") && (
-              <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-0.5 rounded-r bg-primary" />
+              <span className="absolute left-0 inset-y-2 w-0.5 rounded-r-full bg-sidebar-primary" />
             )}
             <Settings className="h-4 w-4 shrink-0" />
             Settings
@@ -72,7 +69,7 @@ export function Sidebar() {
         </Link>
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground/90 hover:bg-white/[0.05] transition-all duration-150 w-full"
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-all duration-150 w-full"
         >
           <LogOut className="h-4 w-4 shrink-0" />
           Sign out

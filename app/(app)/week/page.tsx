@@ -242,7 +242,7 @@ export default function WeekPage() {
                       >
                         <div className={cn(
                           "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-colors",
-                          "hover:bg-white/[0.04]",
+                          "hover:bg-muted/60",
                           task.status === "COMPLETED" && "opacity-40"
                         )}>
                           <div className={cn(

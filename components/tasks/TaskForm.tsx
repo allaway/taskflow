@@ -47,7 +47,7 @@ export function TaskForm({ onSubmit, onCancel, defaultDate, defaultTime, compact
     return (
       <button
         onClick={() => setExpanded(true)}
-        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground w-full px-3 py-2 rounded-lg border border-dashed border-border/60 hover:border-primary/40 hover:bg-white/[0.02] transition-all duration-150"
+        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground w-full px-3 py-2 rounded-lg border border-dashed border-border/60 hover:border-primary/40 hover:bg-muted/60 transition-all duration-150"
         data-testid="add-task-btn"
       >
         <Plus className="h-4 w-4" />
