@@ -24,7 +24,8 @@ import {
   DragOverlay,
 } from "@dnd-kit/core";
 import type { Task } from "@prisma/client";
-import type { CalendarEvent, CalendarEventsResponse } from "@/app/api/calendar/events/route";
+import type { CalendarEvent } from "@/app/api/calendar/events/route";
+import { fetchCalendarEvents, loadCalendarFeeds } from "@/lib/calendarClient";
 
 const HOUR_HEIGHT = 60;
 const START_HOUR = 6;
@@ -214,22 +215,24 @@ export default function TodayPage() {
     Promise.all([
       fetch(`/api/tasks?date=${dateStr}`),
       fetch("/api/tasks?status=INBOX"),
-      fetch(`/api/calendar/events?start=${dateStr}&end=${dateStr}`),
       fetch(`/api/tasks?completedDate=${todayStr}`),
-    ]).then(async ([dayRes, inboxRes, calRes, completedRes]) => {
+    ]).then(async ([dayRes, inboxRes, completedRes]) => {
       if (!active) return;
       if (dayRes.ok) setTasks(await dayRes.json());
       if (inboxRes.ok) setInboxTasks(await inboxRes.json());
-      if (calRes.ok) {
-        const calData: CalendarEventsResponse = await calRes.json();
-        setCalendarEvents(calData.events);
-        if (calData.feedErrors?.length) {
-          console.warn("[calendar] Feed errors:", calData.feedErrors);
-        }
-      }
       if (completedRes.ok) setCompletedToday(await completedRes.json());
       setLoading(false);
     });
+
+    // Calendar: fetch from browser so the user's IP downloads the iCal
+    // (cloud server IPs are blocked by Google Calendar)
+    loadCalendarFeeds().then((feeds) =>
+      fetchCalendarEvents(feeds, dateStr, dateStr)
+    ).then(({ events, feedErrors }) => {
+      if (!active) return;
+      setCalendarEvents(events);
+      if (feedErrors.length) console.warn("[calendar] Feed errors:", feedErrors);
+    }).catch((err) => console.warn("[calendar]", err));
     return () => { active = false; };
   }, [dateStr, refresh]);
 

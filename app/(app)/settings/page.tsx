@@ -166,28 +166,39 @@ export default function SettingsPage() {
   async function testCalendarFeeds() {
     setTestingFeeds(true);
     setFeedErrors({});
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      const res = await fetch(`/api/calendar/events?start=${today}&end=${today}`);
-      if (!res.ok) {
-        toast.error(`Feed test failed (HTTP ${res.status})`);
-        return;
+    const today = new Date().toISOString().slice(0, 10);
+    const errors: Record<string, string> = {};
+
+    await Promise.all(calendarFeeds.map(async (feed) => {
+      try {
+        const normalizedUrl = feed.url.replace(/^webcal:\/\//i, "https://");
+        const fetchRes = await fetch(normalizedUrl);
+        if (!fetchRes.ok) {
+          errors[feed.name] = `HTTP ${fetchRes.status} ${fetchRes.statusText}`;
+          return;
+        }
+        const icsText = await fetchRes.text();
+        const parseRes = await fetch("/api/calendar/parse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ icsText, feedName: feed.name, feedColor: feed.color, start: today, end: today }),
+        });
+        if (!parseRes.ok) {
+          const d = await parseRes.json().catch(() => ({}));
+          errors[feed.name] = d.error ?? `Parse failed (${parseRes.status})`;
+        }
+      } catch (err) {
+        errors[feed.name] = err instanceof Error ? err.message : String(err);
       }
-      const data = await res.json();
-      const errors: Record<string, string> = {};
-      for (const e of (data.feedErrors ?? [])) errors[e.name] = e.error;
-      setFeedErrors(errors);
-      const errCount = Object.keys(errors).length;
-      if (errCount === 0) {
-        toast.success(`All ${calendarFeeds.length} feed${calendarFeeds.length !== 1 ? "s" : ""} loaded successfully`);
-      } else {
-        toast.error(`${errCount} feed${errCount !== 1 ? "s" : ""} failed — see details below`);
-      }
-    } catch (err) {
-      console.error("[testCalendarFeeds]", err);
-      toast.error("Could not reach the calendar API — check the browser console");
-    } finally {
-      setTestingFeeds(false);
+    }));
+
+    setFeedErrors(errors);
+    setTestingFeeds(false);
+    const errCount = Object.keys(errors).length;
+    if (errCount === 0) {
+      toast.success(`All ${calendarFeeds.length} feed${calendarFeeds.length !== 1 ? "s" : ""} loaded successfully`);
+    } else {
+      toast.error(`${errCount} feed${errCount !== 1 ? "s" : ""} failed — see details below`);
     }
   }
 

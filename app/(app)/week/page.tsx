@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Task } from "@prisma/client";
 import { TaskEditModal } from "@/components/tasks/TaskEditModal";
-import type { CalendarEvent, CalendarEventsResponse } from "@/app/api/calendar/events/route";
+import type { CalendarEvent } from "@/app/api/calendar/events/route";
+import { fetchCalendarEvents, loadCalendarFeeds } from "@/lib/calendarClient";
 import {
   DndContext,
   PointerSensor,
@@ -73,33 +74,31 @@ export default function WeekPage() {
     const startStr = format(currentDays[0], "yyyy-MM-dd");
     const endStr   = format(currentDays[6], "yyyy-MM-dd");
 
-    Promise.all([
-      Promise.all(
-        currentDays.map(async (day) => {
-          const dateStr = format(day, "yyyy-MM-dd");
-          const res = await fetch(`/api/tasks?date=${dateStr}`);
-          return [dateStr, res.ok ? await res.json() : []] as [string, Task[]];
-        })
-      ),
-      fetch(`/api/calendar/events?start=${startStr}&end=${endStr}`)
-        .then((r) => r.ok ? r.json() : { events: [], feedErrors: [] })
-        .then((data: CalendarEventsResponse) => {
-          if (data.feedErrors?.length) {
-            console.warn("[calendar] Feed errors:", data.feedErrors);
-          }
-          const grouped: Record<string, CalendarEvent[]> = {};
-          for (const event of data.events) {
-            const d = format(new Date(event.start), "yyyy-MM-dd");
-            (grouped[d] ??= []).push(event);
-          }
-          return grouped;
-        }),
-    ]).then(([taskEntries, eventsGrouped]) => {
+    Promise.all(
+      currentDays.map(async (day) => {
+        const dateStr = format(day, "yyyy-MM-dd");
+        const res = await fetch(`/api/tasks?date=${dateStr}`);
+        return [dateStr, res.ok ? await res.json() : []] as [string, Task[]];
+      })
+    ).then((taskEntries) => {
       if (!active) return;
       setTasksByDate(Object.fromEntries(taskEntries));
-      setEventsByDate(eventsGrouped);
       setLoading(false);
     });
+
+    // Calendar: fetch from browser so the user's IP downloads the iCal
+    loadCalendarFeeds().then((feeds) =>
+      fetchCalendarEvents(feeds, startStr, endStr)
+    ).then(({ events, feedErrors }) => {
+      if (!active) return;
+      if (feedErrors.length) console.warn("[calendar] Feed errors:", feedErrors);
+      const grouped: Record<string, CalendarEvent[]> = {};
+      for (const event of events) {
+        const d = format(new Date(event.start), "yyyy-MM-dd");
+        (grouped[d] ??= []).push(event);
+      }
+      setEventsByDate(grouped);
+    }).catch((err) => console.warn("[calendar]", err));
     return () => { active = false; };
   }, [weekStart, refresh]);
 
