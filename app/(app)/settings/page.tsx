@@ -6,14 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Bot, Key, User, Loader2, CheckCircle2, Eye, EyeOff, Trash2, Plus, Copy, CalendarDays } from "lucide-react";
+import { Bot, Key, User, Loader2, CheckCircle2, Eye, EyeOff, Trash2, Plus, Copy, CalendarDays, Link2, Link2Off } from "lucide-react";
 import { toast } from "sonner";
-
-interface CalendarFeed {
-  url: string;
-  name: string;
-  color: string;
-}
 
 interface UserSettings {
   id: string;
@@ -23,8 +17,9 @@ interface UserSettings {
   aiApiKey: string | null;
   aiModel: string | null;
   aiSchedulingModel: string | null;
-  calendarFeeds: CalendarFeed[];
   dailyBudgetHours: number;
+  googleCalendarConnected: boolean;
+  googleEmail: string | null;
 }
 
 interface ApiToken {
@@ -72,14 +67,11 @@ export default function SettingsPage() {
   const [aiModel, setAiModel] = useState("");
   const [aiSchedulingModel, setAiSchedulingModel] = useState("");
 
-  // Calendar feeds
-  const [calendarFeeds, setCalendarFeeds] = useState<CalendarFeed[]>([]);
-  const [newFeedUrl, setNewFeedUrl] = useState("");
-  const [newFeedName, setNewFeedName] = useState("");
-  const [newFeedColor, setNewFeedColor] = useState("#6366f1");
-  const [savingFeeds, setSavingFeeds] = useState(false);
-  const [testingFeeds, setTestingFeeds] = useState(false);
-  const [feedErrors, setFeedErrors] = useState<Record<string, string>>({});
+  // Google Calendar OAuth state
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
 
   // API tokens
   const [tokens, setTokens] = useState<ApiToken[]>([]);
@@ -98,9 +90,26 @@ export default function SettingsPage() {
         setAiApiKey(data.aiApiKey ?? "");
         setAiModel(data.aiModel ?? (data.aiProvider === "openrouter" ? "anthropic/claude-opus-4-5" : "claude-opus-4-5"));
         setAiSchedulingModel(data.aiSchedulingModel ?? "");
-        setCalendarFeeds(data.calendarFeeds ?? []);
         setDailyBudgetHours(data.dailyBudgetHours ?? 8);
+        setGoogleConnected(data.googleCalendarConnected ?? false);
+        setGoogleEmail(data.googleEmail ?? null);
         setLoading(false);
+
+        // Show success/error toasts from OAuth callback redirect
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("connected") === "1") {
+          toast.success("Google Calendar connected!");
+          window.history.replaceState({}, "", window.location.pathname + "?tab=calendar");
+        } else if (params.get("error")) {
+          const errMap: Record<string, string> = {
+            access_denied: "Google Calendar access was denied.",
+            invalid_state: "Invalid OAuth state — please try again.",
+            missing_tokens: "Google did not return tokens — please try again.",
+            server_error: "Something went wrong — please try again.",
+          };
+          setCalendarError(errMap[params.get("error")!] ?? "Unknown error");
+          window.history.replaceState({}, "", window.location.pathname + "?tab=calendar");
+        }
       });
 
     fetch("/api/tokens")
@@ -135,70 +144,16 @@ export default function SettingsPage() {
     else toast.error("Failed to save profile");
   }
 
-  async function addCalendarFeed() {
-    if (!newFeedUrl.trim()) return;
-    const updated = [...calendarFeeds, { url: newFeedUrl.trim(), name: newFeedName.trim() || "Calendar", color: newFeedColor }];
-    setCalendarFeeds(updated);
-    setNewFeedUrl("");
-    setNewFeedName("");
-    setNewFeedColor("#6366f1");
-    await saveCalendarFeeds(updated);
-  }
-
-  async function removeCalendarFeed(index: number) {
-    const updated = calendarFeeds.filter((_, i) => i !== index);
-    setCalendarFeeds(updated);
-    await saveCalendarFeeds(updated);
-  }
-
-  async function saveCalendarFeeds(feeds: CalendarFeed[]) {
-    setSavingFeeds(true);
-    const res = await fetch("/api/user/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ calendarFeeds: feeds }),
-    });
-    setSavingFeeds(false);
-    if (res.ok) toast.success("Calendar feeds saved");
-    else toast.error("Failed to save calendar feeds");
-  }
-
-  async function testCalendarFeeds() {
-    setTestingFeeds(true);
-    setFeedErrors({});
-    const today = new Date().toISOString().slice(0, 10);
-    const errors: Record<string, string> = {};
-
-    await Promise.all(calendarFeeds.map(async (feed) => {
-      try {
-        const normalizedUrl = feed.url.replace(/^webcal:\/\//i, "https://");
-        const fetchRes = await fetch(normalizedUrl);
-        if (!fetchRes.ok) {
-          errors[feed.name] = `HTTP ${fetchRes.status} ${fetchRes.statusText}`;
-          return;
-        }
-        const icsText = await fetchRes.text();
-        const parseRes = await fetch("/api/calendar/parse", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ icsText, feedName: feed.name, feedColor: feed.color, start: today, end: today }),
-        });
-        if (!parseRes.ok) {
-          const d = await parseRes.json().catch(() => ({}));
-          errors[feed.name] = d.error ?? `Parse failed (${parseRes.status})`;
-        }
-      } catch (err) {
-        errors[feed.name] = err instanceof Error ? err.message : String(err);
-      }
-    }));
-
-    setFeedErrors(errors);
-    setTestingFeeds(false);
-    const errCount = Object.keys(errors).length;
-    if (errCount === 0) {
-      toast.success(`All ${calendarFeeds.length} feed${calendarFeeds.length !== 1 ? "s" : ""} loaded successfully`);
+  async function disconnectGoogle() {
+    setDisconnecting(true);
+    const res = await fetch("/api/auth/google/disconnect", { method: "POST" });
+    setDisconnecting(false);
+    if (res.ok) {
+      setGoogleConnected(false);
+      setGoogleEmail(null);
+      toast.success("Google Calendar disconnected");
     } else {
-      toast.error(`${errCount} feed${errCount !== 1 ? "s" : ""} failed — see details below`);
+      toast.error("Failed to disconnect");
     }
   }
 
@@ -269,7 +224,7 @@ export default function SettingsPage() {
     <div className="max-w-xl mx-auto p-6 space-y-5">
       <h1 className="text-lg font-semibold">Settings</h1>
 
-      <Tabs defaultValue="ai">
+      <Tabs defaultValue={typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") || "ai"}>
         <TabsList className="bg-muted/50 border border-border/60 h-8 p-0.5 gap-0.5">
           <TabsTrigger value="ai" className="flex-1 h-7 gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-none">
             <Bot className="h-3.5 w-3.5" />AI
@@ -388,111 +343,54 @@ export default function SettingsPage() {
         {/* Calendar */}
         <TabsContent value="calendar" className="mt-4 space-y-4">
           <Section
-            title="Calendar Feeds"
-            description="Paste iCal feed URLs from Google Calendar (or any .ics source) to show your events alongside tasks."
+            title="Google Calendar"
+            description="Connect your Google account to show calendar events alongside your tasks."
           >
-            <FieldRow
-              label="How to get your Google Calendar iCal URL"
-              hint={
-                <span>
-                  Google Calendar → Settings → select a calendar → &quot;Secret address in iCal format&quot;. Copy the URL and paste it below.
-                </span>
-              }
-            >
-              <div />
-            </FieldRow>
+            {calendarError && (
+              <p className="text-[11px] text-destructive px-3 py-2 bg-destructive/5 border border-destructive/20 rounded-md">
+                {calendarError}
+              </p>
+            )}
 
-            <Separator className="opacity-50" />
-
-            {/* Add new feed */}
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Calendar name (e.g. Work, Personal)"
-                  value={newFeedName}
-                  onChange={(e) => setNewFeedName(e.target.value)}
-                  className="bg-muted/40 border-border/60 h-9 focus-visible:ring-0 focus-visible:border-primary/60 flex-1"
-                />
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <label className="text-xs text-muted-foreground">Color</label>
-                  <input
-                    type="color"
-                    value={newFeedColor}
-                    onChange={(e) => setNewFeedColor(e.target.value)}
-                    className="h-8 w-10 rounded border border-border/60 bg-transparent cursor-pointer p-0.5"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
-                  value={newFeedUrl}
-                  onChange={(e) => setNewFeedUrl(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") addCalendarFeed(); }}
-                  className="bg-muted/40 border-border/60 h-9 focus-visible:ring-0 focus-visible:border-primary/60 flex-1 font-mono text-xs"
-                />
-                <Button
-                  size="sm"
-                  className="h-9 text-xs shrink-0"
-                  onClick={addCalendarFeed}
-                  disabled={savingFeeds || !newFeedUrl.trim()}
-                >
-                  {savingFeeds
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <Plus className="h-3.5 w-3.5" />
-                  }
-                  <span className="ml-1.5">Add</span>
-                </Button>
-              </div>
-            </div>
-
-            {/* Feed list */}
-            {calendarFeeds.length === 0 ? (
-              <p className="text-xs text-muted-foreground/60 text-center py-3">No calendar feeds added yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {calendarFeeds.map((feed, i) => (
-                  <div key={i} className="space-y-1">
-                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 border border-border/40">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className="h-3 w-3 rounded-full shrink-0"
-                          style={{ backgroundColor: feed.color }}
-                        />
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium">{feed.name}</p>
-                          <p className="text-[11px] text-muted-foreground/60 font-mono truncate max-w-xs">
-                            {feed.url}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0 ml-2"
-                        onClick={() => removeCalendarFeed(i)}
-                        title="Remove feed"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    {feedErrors[feed.name] && (
-                      <p className="text-[11px] text-destructive px-3 py-1 bg-destructive/5 border border-destructive/20 rounded-md">
-                        Error: {feedErrors[feed.name]}
-                      </p>
+            {googleConnected ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-emerald-800">Connected</p>
+                    {googleEmail && (
+                      <p className="text-[11px] text-emerald-600 truncate">{googleEmail}</p>
                     )}
                   </div>
-                ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  All your Google Calendars will be shown in the Today and Week views.
+                </p>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full h-8 text-xs mt-1"
-                  onClick={testCalendarFeeds}
-                  disabled={testingFeeds}
+                  className="h-8 text-xs border-border/60 bg-transparent gap-1.5 text-muted-foreground hover:text-destructive hover:border-destructive/40"
+                  onClick={disconnectGoogle}
+                  disabled={disconnecting}
                 >
-                  {testingFeeds ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-                  Test feeds
+                  {disconnecting
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Link2Off className="h-3.5 w-3.5" />
+                  }
+                  Disconnect Google Calendar
                 </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Grant read-only access to your Google Calendars. Events will appear alongside your tasks in the Today and Week views.
+                </p>
+                <a href="/api/auth/google">
+                  <Button size="sm" className="h-8 text-xs gap-1.5">
+                    <Link2 className="h-3.5 w-3.5" />
+                    Connect Google Calendar
+                  </Button>
+                </a>
               </div>
             )}
           </Section>

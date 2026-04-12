@@ -21,8 +21,11 @@ model User {
   aiModel          String?
   aiSchedulingModel String?
 
-  // Calendar feeds — JSON array of {url, name, color}
-  calendarFeeds    String?  // JSON
+  // Google Calendar OAuth
+  googleAccessToken  String?   // AES-256-GCM encrypted
+  googleRefreshToken String?   // AES-256-GCM encrypted
+  googleTokenExpiry  DateTime?
+  googleEmail        String?   // connected Google account email
 
   // Daily work budget in hours (default 8)
   dailyBudgetHours Int     @default(8)

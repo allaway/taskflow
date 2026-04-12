@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import type { Task } from "@prisma/client";
 import { TaskEditModal } from "@/components/tasks/TaskEditModal";
 import type { CalendarEvent } from "@/app/api/calendar/events/route";
-import { fetchCalendarEvents, loadCalendarFeeds } from "@/lib/calendarClient";
+import { fetchCalendarEvents } from "@/lib/calendarClient";
 import {
   DndContext,
   PointerSensor,
@@ -86,10 +86,7 @@ export default function WeekPage() {
       setLoading(false);
     });
 
-    // Calendar: fetch from browser so the user's IP downloads the iCal
-    loadCalendarFeeds().then((feeds) =>
-      fetchCalendarEvents(feeds, startStr, endStr)
-    ).then(({ events, feedErrors }) => {
+    fetchCalendarEvents(startStr, endStr).then(({ events, feedErrors }) => {
       if (!active) return;
       if (feedErrors.length) console.warn("[calendar] Feed errors:", feedErrors);
       const grouped: Record<string, CalendarEvent[]> = {};

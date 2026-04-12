@@ -25,7 +25,7 @@ import {
 } from "@dnd-kit/core";
 import type { Task } from "@prisma/client";
 import type { CalendarEvent } from "@/app/api/calendar/events/route";
-import { fetchCalendarEvents, loadCalendarFeeds } from "@/lib/calendarClient";
+import { fetchCalendarEvents } from "@/lib/calendarClient";
 
 const HOUR_HEIGHT = 60;
 const START_HOUR = 6;
@@ -224,11 +224,7 @@ export default function TodayPage() {
       setLoading(false);
     });
 
-    // Calendar: fetch from browser so the user's IP downloads the iCal
-    // (cloud server IPs are blocked by Google Calendar)
-    loadCalendarFeeds().then((feeds) =>
-      fetchCalendarEvents(feeds, dateStr, dateStr)
-    ).then(({ events, feedErrors }) => {
+    fetchCalendarEvents(dateStr, dateStr).then(({ events, feedErrors }) => {
       if (!active) return;
       setCalendarEvents(events);
       if (feedErrors.length) console.warn("[calendar] Feed errors:", feedErrors);
