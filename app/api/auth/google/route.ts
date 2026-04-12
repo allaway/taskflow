@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { auth } from "@/lib/auth";
-import { google } from "googleapis";
+
+const SCOPES = [
+  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/userinfo.email",
+].join(" ");
 
 function getBaseUrl(req: NextRequest): string {
-  // On Railway (and most reverse-proxy hosts) the forwarded headers tell us the public URL
   const proto = req.headers.get("x-forwarded-proto") ?? "https";
   const host  = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
   if (host) return `${proto}://${host}`;
-  // Fallback to NEXTAUTH_URL for local dev
   return process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 }
 
@@ -18,25 +20,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const clientId    = process.env.GOOGLE_CLIENT_ID;
   const baseUrl     = getBaseUrl(req);
   const redirectUri = `${baseUrl}/api/auth/google/callback`;
+  const state       = randomBytes(32).toString("hex");
 
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    redirectUri,
-  );
+  if (!clientId) {
+    return NextResponse.json({ error: "GOOGLE_CLIENT_ID not configured" }, { status: 500 });
+  }
 
-  const state   = randomBytes(32).toString("hex");
-  const authUrl = oauth2Client.generateAuthUrl({
-    access_type: "offline",
-    scope: [
-      "https://www.googleapis.com/auth/calendar.readonly",
-      "https://www.googleapis.com/auth/userinfo.email",
-    ],
+  // Build the URL manually to guarantee all parameters are present
+  const params = new URLSearchParams({
+    client_id:     clientId,
+    redirect_uri:  redirectUri,
+    response_type: "code",
+    scope:         SCOPES,
+    access_type:   "offline",
+    prompt:        "consent",
     state,
-    prompt: "consent",
   });
+
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 
   const response = NextResponse.redirect(authUrl);
   response.cookies.set("google_oauth_state", state, {
