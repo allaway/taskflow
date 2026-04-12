@@ -51,7 +51,25 @@ export async function GET(req: NextRequest) {
   await Promise.allSettled(
     feeds.map(async (feed) => {
       try {
-        const data = await ical.async.fromURL(feed.url);
+        // webcal:// is just http(s):// under a different scheme; node's http client won't accept it
+        const normalizedUrl = feed.url.replace(/^webcal:\/\//i, "https://");
+
+        // Enforce a per-feed timeout so one slow feed can't hang the entire request
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15_000);
+        let rawIcal: string;
+        try {
+          const fetchRes = await fetch(normalizedUrl, { signal: controller.signal });
+          clearTimeout(timeout);
+          if (!fetchRes.ok) throw new Error(`HTTP ${fetchRes.status} ${fetchRes.statusText}`);
+          rawIcal = await fetchRes.text();
+        } catch (fetchErr) {
+          clearTimeout(timeout);
+          throw fetchErr instanceof Error && fetchErr.name === "AbortError"
+            ? new Error("Timed out after 15 s")
+            : fetchErr;
+        }
+        const data = ical.sync.parseICS(rawIcal);
 
         for (const key in data) {
           const component = data[key];

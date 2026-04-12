@@ -166,17 +166,29 @@ export default function SettingsPage() {
   async function testCalendarFeeds() {
     setTestingFeeds(true);
     setFeedErrors({});
-    const today = new Date().toISOString().slice(0, 10);
-    const res = await fetch(`/api/calendar/events?start=${today}&end=${today}`);
-    setTestingFeeds(false);
-    if (!res.ok) { toast.error("Failed to test feeds"); return; }
-    const data = await res.json();
-    const errors: Record<string, string> = {};
-    for (const e of (data.feedErrors ?? [])) errors[e.name] = e.error;
-    setFeedErrors(errors);
-    const errCount = Object.keys(errors).length;
-    if (errCount === 0) toast.success(`All ${calendarFeeds.length} feed${calendarFeeds.length !== 1 ? "s" : ""} loaded successfully`);
-    else toast.error(`${errCount} feed${errCount !== 1 ? "s" : ""} failed — see details below`);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch(`/api/calendar/events?start=${today}&end=${today}`);
+      if (!res.ok) {
+        toast.error(`Feed test failed (HTTP ${res.status})`);
+        return;
+      }
+      const data = await res.json();
+      const errors: Record<string, string> = {};
+      for (const e of (data.feedErrors ?? [])) errors[e.name] = e.error;
+      setFeedErrors(errors);
+      const errCount = Object.keys(errors).length;
+      if (errCount === 0) {
+        toast.success(`All ${calendarFeeds.length} feed${calendarFeeds.length !== 1 ? "s" : ""} loaded successfully`);
+      } else {
+        toast.error(`${errCount} feed${errCount !== 1 ? "s" : ""} failed — see details below`);
+      }
+    } catch (err) {
+      console.error("[testCalendarFeeds]", err);
+      toast.error("Could not reach the calendar API — check the browser console");
+    } finally {
+      setTestingFeeds(false);
+    }
   }
 
   async function testConnection() {
