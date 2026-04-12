@@ -385,12 +385,14 @@ export default function SettingsPage() {
                 <p className="text-xs text-muted-foreground">
                   Grant read-only access to your Google Calendars. Events will appear alongside your tasks in the Today and Week views.
                 </p>
-                <a href="/api/auth/google">
-                  <Button size="sm" className="h-8 text-xs gap-1.5">
-                    <Link2 className="h-3.5 w-3.5" />
-                    Connect Google Calendar
-                  </Button>
-                </a>
+                <Button
+                  size="sm"
+                  className="h-8 text-xs gap-1.5"
+                  onClick={() => { window.location.href = "/api/auth/google"; }}
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                  Connect Google Calendar
+                </Button>
               </div>
             )}
           </Section>
