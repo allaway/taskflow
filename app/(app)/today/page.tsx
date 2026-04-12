@@ -24,7 +24,7 @@ import {
   DragOverlay,
 } from "@dnd-kit/core";
 import type { Task } from "@prisma/client";
-import type { CalendarEvent } from "@/app/api/calendar/events/route";
+import type { CalendarEvent, CalendarEventsResponse } from "@/app/api/calendar/events/route";
 
 const HOUR_HEIGHT = 60;
 const START_HOUR = 6;
@@ -186,24 +186,48 @@ export default function TodayPage() {
   const [shutdownOpen, setShutdownOpen] = useState(false);
   const [dailyBudgetHours, setDailyBudgetHours] = useState(8);
   const [refresh, setRefresh] = useState(0);
+  const [completedToday, setCompletedToday] = useState<Task[]>([]);
   const timelineRef = useRef<HTMLDivElement>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const dateStr = format(date, "yyyy-MM-dd");
   const todayView = isToday(date);
 
+  // Advance overdue tasks once per calendar day
+  useEffect(() => {
+    const todayKey = format(new Date(), "yyyy-MM-dd");
+    const storageKey = "taskflow_last_advanced";
+    if (typeof window !== "undefined" && localStorage.getItem(storageKey) !== todayKey) {
+      fetch("/api/tasks/advance-overdue", { method: "POST" }).then((r) => {
+        if (r.ok) {
+          localStorage.setItem(storageKey, todayKey);
+          setRefresh((r) => r + 1);
+        }
+      });
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
     setLoading(true);
+    const todayStr = format(new Date(), "yyyy-MM-dd");
     Promise.all([
       fetch(`/api/tasks?date=${dateStr}`),
       fetch("/api/tasks?status=INBOX"),
       fetch(`/api/calendar/events?start=${dateStr}&end=${dateStr}`),
-    ]).then(async ([dayRes, inboxRes, calRes]) => {
+      fetch(`/api/tasks?completedDate=${todayStr}`),
+    ]).then(async ([dayRes, inboxRes, calRes, completedRes]) => {
       if (!active) return;
       if (dayRes.ok) setTasks(await dayRes.json());
       if (inboxRes.ok) setInboxTasks(await inboxRes.json());
-      if (calRes.ok) setCalendarEvents(await calRes.json());
+      if (calRes.ok) {
+        const calData: CalendarEventsResponse = await calRes.json();
+        setCalendarEvents(calData.events);
+        if (calData.feedErrors?.length) {
+          console.warn("[calendar] Feed errors:", calData.feedErrors);
+        }
+      }
+      if (completedRes.ok) setCompletedToday(await completedRes.json());
       setLoading(false);
     });
     return () => { active = false; };
@@ -606,6 +630,7 @@ export default function TodayPage() {
         onOpenChange={setShutdownOpen}
         date={date}
         tasks={tasks}
+        completedToday={completedToday}
         onDone={fetchTasks}
       />
     </DndContext>

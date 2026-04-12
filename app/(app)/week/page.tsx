@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Task } from "@prisma/client";
 import { TaskEditModal } from "@/components/tasks/TaskEditModal";
-import type { CalendarEvent } from "@/app/api/calendar/events/route";
+import type { CalendarEvent, CalendarEventsResponse } from "@/app/api/calendar/events/route";
 import {
   DndContext,
   PointerSensor,
@@ -82,11 +82,13 @@ export default function WeekPage() {
         })
       ),
       fetch(`/api/calendar/events?start=${startStr}&end=${endStr}`)
-        .then((r) => r.ok ? r.json() : [])
-        .then((events: CalendarEvent[]) => {
-          // Group events by date
+        .then((r) => r.ok ? r.json() : { events: [], feedErrors: [] })
+        .then((data: CalendarEventsResponse) => {
+          if (data.feedErrors?.length) {
+            console.warn("[calendar] Feed errors:", data.feedErrors);
+          }
           const grouped: Record<string, CalendarEvent[]> = {};
-          for (const event of events) {
+          for (const event of data.events) {
             const d = format(new Date(event.start), "yyyy-MM-dd");
             (grouped[d] ??= []).push(event);
           }

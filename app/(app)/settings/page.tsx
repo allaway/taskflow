@@ -78,6 +78,8 @@ export default function SettingsPage() {
   const [newFeedName, setNewFeedName] = useState("");
   const [newFeedColor, setNewFeedColor] = useState("#6366f1");
   const [savingFeeds, setSavingFeeds] = useState(false);
+  const [testingFeeds, setTestingFeeds] = useState(false);
+  const [feedErrors, setFeedErrors] = useState<Record<string, string>>({});
 
   // API tokens
   const [tokens, setTokens] = useState<ApiToken[]>([]);
@@ -159,6 +161,22 @@ export default function SettingsPage() {
     setSavingFeeds(false);
     if (res.ok) toast.success("Calendar feeds saved");
     else toast.error("Failed to save calendar feeds");
+  }
+
+  async function testCalendarFeeds() {
+    setTestingFeeds(true);
+    setFeedErrors({});
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await fetch(`/api/calendar/events?start=${today}&end=${today}`);
+    setTestingFeeds(false);
+    if (!res.ok) { toast.error("Failed to test feeds"); return; }
+    const data = await res.json();
+    const errors: Record<string, string> = {};
+    for (const e of (data.feedErrors ?? [])) errors[e.name] = e.error;
+    setFeedErrors(errors);
+    const errCount = Object.keys(errors).length;
+    if (errCount === 0) toast.success(`All ${calendarFeeds.length} feed${calendarFeeds.length !== 1 ? "s" : ""} loaded successfully`);
+    else toast.error(`${errCount} feed${errCount !== 1 ? "s" : ""} failed — see details below`);
   }
 
   async function testConnection() {
@@ -411,33 +429,47 @@ export default function SettingsPage() {
             ) : (
               <div className="space-y-2">
                 {calendarFeeds.map((feed, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 border border-border/40"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div
-                        className="h-3 w-3 rounded-full shrink-0"
-                        style={{ backgroundColor: feed.color }}
-                      />
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium">{feed.name}</p>
-                        <p className="text-[11px] text-muted-foreground/60 font-mono truncate max-w-xs">
-                          {feed.url}
-                        </p>
+                  <div key={i} className="space-y-1">
+                    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 border border-border/40">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className="h-3 w-3 rounded-full shrink-0"
+                          style={{ backgroundColor: feed.color }}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium">{feed.name}</p>
+                          <p className="text-[11px] text-muted-foreground/60 font-mono truncate max-w-xs">
+                            {feed.url}
+                          </p>
+                        </div>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0 ml-2"
+                        onClick={() => removeCalendarFeed(i)}
+                        title="Remove feed"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0 ml-2"
-                      onClick={() => removeCalendarFeed(i)}
-                      title="Remove feed"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {feedErrors[feed.name] && (
+                      <p className="text-[11px] text-destructive px-3 py-1 bg-destructive/5 border border-destructive/20 rounded-md">
+                        Error: {feedErrors[feed.name]}
+                      </p>
+                    )}
                   </div>
                 ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-8 text-xs mt-1"
+                  onClick={testCalendarFeeds}
+                  disabled={testingFeeds}
+                >
+                  {testingFeeds ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                  Test feeds
+                </Button>
               </div>
             )}
           </Section>

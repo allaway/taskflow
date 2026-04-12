@@ -17,6 +17,11 @@ export interface CalendarEvent {
   color: string;
 }
 
+export interface CalendarEventsResponse {
+  events: CalendarEvent[];
+  feedErrors: { name: string; error: string }[];
+}
+
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,9 +43,10 @@ export async function GET(req: NextRequest) {
   });
 
   const feeds: CalendarFeed[] = user?.calendarFeeds ? JSON.parse(user.calendarFeeds) : [];
-  if (feeds.length === 0) return NextResponse.json([]);
+  if (feeds.length === 0) return NextResponse.json({ events: [], feedErrors: [] });
 
   const allEvents: CalendarEvent[] = [];
+  const feedErrors: { name: string; error: string }[] = [];
 
   await Promise.allSettled(
     feeds.map(async (feed) => {
@@ -52,22 +58,65 @@ export async function GET(req: NextRequest) {
           if (!component || component.type !== "VEVENT") continue;
           const event = component as VEvent;
 
-          const start = event.start;
-          const end   = event.end ?? event.start;
-          if (!start) continue;
+          if (!event.start) continue;
 
-          const eventStart = new Date(start);
-          const eventEnd   = new Date(end);
-
-          // Detect all-day: node-ical sets datetype="date" for VALUE=DATE
           const allDay = (event as { datetype?: string }).datetype === "date";
+          const title = typeof event.summary === "string"
+            ? event.summary
+            : (event.summary as { val?: string })?.val ?? "(No title)";
 
-          // Skip events outside the requested range
+          const durationMs = event.end
+            ? new Date(event.end).getTime() - new Date(event.start).getTime()
+            : 0;
+
+          // Handle recurring events
+          if (event.rrule) {
+            const occurrences = event.rrule.between(rangeStart, rangeEnd, true);
+
+            for (const occStart of occurrences) {
+              const occStartStr = occStart.toISOString().replace("T", "T").split(".")[0];
+              const dateKey = occStartStr.slice(0, 10);
+              const dateTimeKey = occStart.toISOString();
+
+              // Check if this occurrence is cancelled (exdate)
+              if (event.exdate) {
+                const exdates = Object.values(event.exdate) as Date[];
+                const isCancelled = exdates.some(
+                  (ex) => Math.abs(new Date(ex).getTime() - occStart.getTime()) < 1000
+                );
+                if (isCancelled) continue;
+              }
+
+              // Check for per-occurrence overrides (modified instances)
+              const override = event.recurrences?.[dateKey] ?? event.recurrences?.[dateTimeKey];
+              const effectiveStart: Date = (override?.start as Date | undefined) ?? occStart;
+              const effectiveEnd: Date   = (override?.end as Date | undefined) ?? new Date(occStart.getTime() + durationMs);
+              const effectiveTitle = override?.summary
+                ? (typeof override.summary === "string" ? override.summary : (override.summary as { val?: string })?.val ?? title)
+                : title;
+
+              allEvents.push({
+                id: `${feed.url}::${String(event.uid ?? key)}::${occStart.toISOString()}`,
+                title: effectiveTitle,
+                start: effectiveStart.toISOString(),
+                end:   effectiveEnd.toISOString(),
+                allDay,
+                calendarName: feed.name,
+                color: feed.color,
+              });
+            }
+            continue; // Don't also add the base event below
+          }
+
+          // Non-recurring event
+          const eventStart = new Date(event.start);
+          const eventEnd   = event.end ? new Date(event.end) : new Date(eventStart.getTime() + durationMs);
+
           if (eventEnd < rangeStart || eventStart > rangeEnd) continue;
 
           allEvents.push({
             id: `${feed.url}::${String(event.uid ?? key)}`,
-            title: typeof event.summary === "string" ? event.summary : (event.summary as { val?: string })?.val ?? "(No title)",
+            title,
             start: eventStart.toISOString(),
             end:   eventEnd.toISOString(),
             allDay,
@@ -75,14 +124,15 @@ export async function GET(req: NextRequest) {
             color: feed.color,
           });
         }
-      } catch {
-        // Silently skip feeds that fail (bad URL, network error, etc.)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[calendar] Failed to fetch feed "${feed.name}" (${feed.url}):`, message);
+        feedErrors.push({ name: feed.name, error: message });
       }
     })
   );
 
-  // Sort by start time
   allEvents.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
-  return NextResponse.json(allEvents);
+  return NextResponse.json({ events: allEvents, feedErrors });
 }
