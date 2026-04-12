@@ -62,11 +62,14 @@ export async function rateLimit(
 
 /**
  * Extracts the client IP from a request for rate limiting keys.
+ * Uses the rightmost entry in X-Forwarded-For, which is appended by the
+ * trusted proxy (Railway) and cannot be spoofed by the client.
  */
 export function getClientIp(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
-    return forwarded.split(",")[0].trim();
+    const parts = forwarded.split(",");
+    return parts[parts.length - 1].trim();
   }
   return request.headers.get("x-real-ip") ?? "unknown";
 }

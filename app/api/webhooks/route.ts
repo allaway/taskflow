@@ -9,10 +9,10 @@ export async function POST(req: NextRequest) {
   if (limited) return limited;
 
   const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
+  const providedToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  if (!providedToken) {
     return NextResponse.json({ error: "Missing or invalid Authorization header" }, { status: 401 });
   }
-  const providedToken = authHeader.slice(7);
   const tokenHash = hashToken(providedToken);
 
   const apiToken = await prisma.apiToken.findUnique({

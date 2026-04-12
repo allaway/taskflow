@@ -20,7 +20,11 @@ import { generateToken } from "@/lib/tokens";
 import { createHmac } from "crypto";
 // getOrigin imported for future use — authorize redirects use redirect_uri from the client
 
-const secret = () => process.env.NEXTAUTH_SECRET ?? "dev-secret";
+const secret = () => {
+  const s = process.env.NEXTAUTH_SECRET;
+  if (!s) throw new Error("NEXTAUTH_SECRET is not set");
+  return s;
+};
 
 export function signCode(payload: object): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -40,7 +44,8 @@ export function verifyCode(code: string): Record<string, unknown> | null {
   for (let i = 0; i < sig.length; i++) diff |= sig.charCodeAt(i) ^ expected.charCodeAt(i);
   if (diff !== 0) return null;
   const payload = JSON.parse(Buffer.from(data, "base64url").toString()) as Record<string, unknown>;
-  if (typeof payload.exp === "number" && payload.exp < Date.now() / 1000) return null;
+  // exp is mandatory — codes without it are treated as invalid
+  if (typeof payload.exp !== "number" || payload.exp < Date.now() / 1000) return null;
   return payload;
 }
 
@@ -55,6 +60,17 @@ export async function GET(req: NextRequest) {
 
   if (responseType !== "code" || !redirectUri) {
     return new NextResponse("Missing response_type=code or redirect_uri", { status: 400 });
+  }
+
+  // Validate redirect_uri is a legitimate http/https URL to prevent open redirect
+  let parsedRedirect: URL;
+  try {
+    parsedRedirect = new URL(redirectUri);
+  } catch {
+    return new NextResponse("Invalid redirect_uri", { status: 400 });
+  }
+  if (parsedRedirect.protocol !== "http:" && parsedRedirect.protocol !== "https:") {
+    return new NextResponse("redirect_uri must use http or https", { status: 400 });
   }
 
   // Require the user to be logged in

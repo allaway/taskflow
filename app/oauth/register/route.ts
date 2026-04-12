@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
+import { rateLimit, getClientIp } from "@/lib/rateLimit";
 
 /**
  * OAuth 2.0 Dynamic Client Registration (RFC 7591)
@@ -10,6 +11,9 @@ import { randomBytes } from "crypto";
  * later — the user session is the real gate).
  */
 export async function POST(req: NextRequest) {
+  const limited = await rateLimit(getClientIp(req), "api");
+  if (limited) return limited;
+
   const body = await req.json().catch(() => ({}));
 
   const clientId = randomBytes(16).toString("hex");

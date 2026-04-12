@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2, X, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
 import type { Task } from "@prisma/client";
 
 interface LabelEntry { name: string; color: string; }
@@ -50,7 +49,8 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
       setNotes(task.notes ?? "");
       setPriority(task.priority as "LOW" | "MEDIUM" | "HIGH");
       setStatus(task.status as "INBOX" | "SCHEDULED" | "COMPLETED" | "CANCELLED");
-      setScheduledDate(task.scheduledDate ? format(new Date(task.scheduledDate), "yyyy-MM-dd") : "");
+      // Slice the ISO string directly to avoid UTC→local timezone shift
+      setScheduledDate(task.scheduledDate ? String(task.scheduledDate).slice(0, 10) : "");
       setStartTime(task.startTime ?? "");
       setDuration(task.duration?.toString() ?? "");
       try {
@@ -65,12 +65,11 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
 
   const done = status === "COMPLETED";
 
-  function toggleComplete() {
-    if (done) {
-      setStatus(task!.scheduledDate ? "SCHEDULED" : "INBOX");
-    } else {
-      setStatus("COMPLETED");
-    }
+  async function toggleComplete() {
+    const newStatus = done ? (task!.scheduledDate ? "SCHEDULED" : "INBOX") : "COMPLETED";
+    setStatus(newStatus);
+    await onUpdate(task!.id, { status: newStatus });
+    onOpenChange(false);
   }
 
   function addLabel(name: string) {

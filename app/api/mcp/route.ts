@@ -110,6 +110,14 @@ const TOOLS = [
 
 // ── Tool execution ────────────────────────────────────────────────────────────
 
+function assertNotPast(dateStr: unknown, field = "scheduledDate") {
+  if (!dateStr) return;
+  const d = new Date(String(dateStr));
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  if (d < today) throw new Error(`${field} cannot be in the past`);
+}
+
 async function callTool(
   name: string,
   args: Record<string, unknown>,
@@ -135,6 +143,7 @@ async function callTool(
 
   if (name === "create_task") {
     if (!args.title) throw new Error("title is required");
+    assertNotPast(args.scheduledDate);
     return prisma.task.create({
       data: {
         title: String(args.title),
@@ -154,18 +163,29 @@ async function callTool(
   if (name === "update_task") {
     const existing = await prisma.task.findFirst({ where: { id: String(args.id), userId } });
     if (!existing) throw new Error("Task not found");
-    const { id, ...updates } = args as Record<string, unknown>;
-    const data: Record<string, unknown> = { ...updates };
-    if ("scheduledDate" in updates) {
-      data.scheduledDate = updates.scheduledDate ? new Date(String(updates.scheduledDate)) : null;
+    assertNotPast(args.scheduledDate);
+    // Explicit allowlist — never let callers overwrite userId, source, completedAt, etc.
+    const data: Record<string, unknown> = {};
+    if (args.title !== undefined) data.title = String(args.title);
+    if (args.description !== undefined) data.description = args.description ? String(args.description) : null;
+    if (args.notes !== undefined) data.notes = args.notes ? String(args.notes) : null;
+    if (args.priority !== undefined) data.priority = args.priority;
+    if (args.status !== undefined) data.status = args.status;
+    if (args.startTime !== undefined) data.startTime = args.startTime ? String(args.startTime) : null;
+    if (args.duration !== undefined) data.duration = args.duration ? Number(args.duration) : null;
+    if ("scheduledDate" in args) {
+      data.scheduledDate = args.scheduledDate ? new Date(String(args.scheduledDate)) : null;
     }
-    return prisma.task.update({ where: { id: String(id) }, data });
+    return prisma.task.update({ where: { id: String(args.id) }, data });
   }
 
   if (name === "complete_task") {
     const existing = await prisma.task.findFirst({ where: { id: String(args.id), userId } });
     if (!existing) throw new Error("Task not found");
-    return prisma.task.update({ where: { id: String(args.id) }, data: { status: "COMPLETED" } });
+    return prisma.task.update({
+      where: { id: String(args.id) },
+      data: { status: "COMPLETED", completedAt: new Date() },
+    });
   }
 
   if (name === "delete_task") {

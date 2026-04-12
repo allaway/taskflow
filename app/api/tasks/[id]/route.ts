@@ -42,6 +42,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (parsed.data.status === "SCHEDULED" && !data.scheduledDate && !existing.scheduledDate) {
     return NextResponse.json({ error: "scheduledDate required when setting status to SCHEDULED" }, { status: 400 });
   }
+  // Track completedAt timestamp
+  if (parsed.data.status === "COMPLETED" && existing.status !== "COMPLETED") {
+    data.completedAt = new Date();
+  } else if (parsed.data.status && parsed.data.status !== "COMPLETED" && existing.status === "COMPLETED") {
+    data.completedAt = null;
+  }
 
   const task = await prisma.task.update({ where: { id }, data });
   return NextResponse.json(task);

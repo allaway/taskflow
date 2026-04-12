@@ -54,6 +54,9 @@ model Task {
   userId        String
   user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  completedAt   DateTime?  // set when status → COMPLETED
+  daysOverdue   Int        @default(0)  // incremented each time task slides forward
+
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 

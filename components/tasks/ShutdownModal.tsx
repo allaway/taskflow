@@ -13,13 +13,19 @@ interface ShutdownModalProps {
   onOpenChange: (open: boolean) => void;
   date: Date;
   tasks: Task[];
+  completedToday?: Task[];
   onDone: () => void;
 }
 
 type Disposition = "defer" | "inbox" | "keep";
 
-export function ShutdownModal({ open, onOpenChange, date, tasks, onDone }: ShutdownModalProps) {
-  const completed = tasks.filter((t) => t.status === "COMPLETED");
+export function ShutdownModal({ open, onOpenChange, date, tasks, completedToday = [], onDone }: ShutdownModalProps) {
+  // Merge tasks completed today from any source (scheduled for today or via MCP/API)
+  const completedIds = new Set(completedToday.map((t) => t.id));
+  const todayCompleted = [
+    ...completedToday,
+    ...tasks.filter((t) => t.status === "COMPLETED" && !completedIds.has(t.id)),
+  ];
   const incomplete = tasks.filter((t) => t.status !== "COMPLETED" && t.status !== "CANCELLED");
   const [dispositions, setDispositions] = useState<Record<string, Disposition>>({});
   const [applying, setApplying] = useState(false);
@@ -80,11 +86,11 @@ export function ShutdownModal({ open, onOpenChange, date, tasks, onDone }: Shutd
         <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
           <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
           <div>
-            <p className="text-sm font-medium text-emerald-400">{completed.length} completed</p>
-            {completed.length > 0 && (
+            <p className="text-sm font-medium text-emerald-400">{todayCompleted.length} completed today</p>
+            {todayCompleted.length > 0 && (
               <p className="text-[11px] text-muted-foreground/70 line-clamp-1">
-                {completed.slice(0, 3).map(t => t.title).join(", ")}
-                {completed.length > 3 && ` +${completed.length - 3} more`}
+                {todayCompleted.slice(0, 3).map(t => t.title).join(", ")}
+                {todayCompleted.length > 3 && ` +${todayCompleted.length - 3} more`}
               </p>
             )}
           </div>

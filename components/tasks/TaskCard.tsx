@@ -19,7 +19,7 @@ interface TaskCardProps {
 const priorityAccent = {
   HIGH:   "bg-rose-500",
   MEDIUM: "bg-amber-500",
-  LOW:    "bg-slate-600",
+  LOW:    "bg-slate-500/70",
 };
 
 const sourceLabel = {
@@ -43,32 +43,37 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
     <>
       <div
         className={cn(
-          "group relative flex items-start gap-3 px-3 py-2.5 rounded-lg",
+          "group relative flex items-start gap-3 px-3 py-2.5 rounded-xl",
           "bg-card border border-border/60",
           "transition-all duration-150",
-          done    ? "opacity-50" : "hover:border-border hover:bg-white/[0.03]",
-          dragging && "shadow-2xl rotate-1 ring-1 ring-primary/60 scale-[1.02]"
+          done
+            ? "opacity-40"
+            : "hover:border-border/90 hover:bg-white/[0.025] hover:shadow-sm",
+          dragging && "shadow-2xl rotate-[0.8deg] ring-1 ring-primary/50 scale-[1.02]"
         )}
         data-testid="task-card"
         data-task-id={task.id}
       >
         {/* Priority accent line */}
-        <div className={cn("absolute left-0 top-2.5 bottom-2.5 w-0.5 rounded-r-full", priorityAccent[task.priority])} />
+        <div className={cn(
+          "absolute left-0 top-3 bottom-3 w-[2.5px] rounded-r-full opacity-80",
+          priorityAccent[task.priority]
+        )} />
 
         {/* Checkbox */}
         <button
           onClick={toggleComplete}
           className={cn(
-            "mt-0.5 h-4 w-4 shrink-0 rounded-full border transition-all duration-150 flex items-center justify-center",
+            "mt-0.5 h-[15px] w-[15px] shrink-0 rounded-full border transition-all duration-200 flex items-center justify-center",
             done
-              ? "bg-primary border-primary"
-              : "border-border hover:border-primary/70"
+              ? "bg-primary border-primary shadow-[0_0_8px_-1px] shadow-primary/50"
+              : "border-border/80 hover:border-primary/60 hover:shadow-[0_0_6px_-2px] hover:shadow-primary/30"
           )}
           data-testid="task-complete-btn"
         >
           {done && (
-            <svg className="h-2.5 w-2.5 text-primary-foreground" viewBox="0 0 10 8" fill="none">
-              <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <svg className="h-[9px] w-[9px] text-primary-foreground" viewBox="0 0 10 8" fill="none">
+              <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           )}
         </button>
@@ -76,14 +81,14 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
         {/* Content */}
         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setDetailOpen(true)}>
           <p className={cn(
-            "text-sm leading-snug break-words",
-            done ? "line-through text-muted-foreground" : "text-foreground"
+            "text-[13px] leading-snug break-words",
+            done ? "line-through text-muted-foreground/60" : "text-foreground"
           )}>
             {task.title}
           </p>
 
           {task.description && !done && (
-            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+            <p className="text-xs text-muted-foreground/70 mt-0.5 line-clamp-2 leading-relaxed">
               {task.description}
             </p>
           )}
@@ -94,9 +99,9 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
               const parsed = JSON.parse((task as Task & { labels: string }).labels) as string[];
               if (!Array.isArray(parsed) || parsed.length === 0) return null;
               return (
-                <div className="flex flex-wrap gap-1 mt-1">
+                <div className="flex flex-wrap gap-1 mt-1.5">
                   {parsed.map((label: string) => (
-                    <span key={label} className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary/80 font-medium">
+                    <span key={label} className="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary/75 font-medium tracking-wide">
                       {label}
                     </span>
                   ))}
@@ -113,10 +118,10 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
                 </span>
               )}
               {showTime && task.startTime && (
-                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1 text-[11px] text-muted-foreground/60">
                   <Clock className="h-3 w-3" />
                   {task.startTime}
-                  {task.duration && <span className="text-muted-foreground/60">· {task.duration}m</span>}
+                  {task.duration && <span className="text-muted-foreground/40">· {task.duration}m</span>}
                 </span>
               )}
             </div>
@@ -128,7 +133,7 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-muted-foreground hover:text-foreground"
+            className="h-6 w-6 text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.08]"
             title="Generate AI prompt"
             onClick={() => setPromptOpen(true)}
             data-testid="generate-prompt-btn"
@@ -141,7 +146,7 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  className="h-6 w-6 text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.08]"
                 />
               }
             >

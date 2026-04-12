@@ -16,30 +16,30 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-52 flex flex-col shrink-0 border-r border-border/60 bg-sidebar">
+    <aside className="w-[212px] flex flex-col shrink-0 border-r border-sidebar-border bg-sidebar">
       {/* Logo */}
-      <div className="h-14 flex items-center px-4 border-b border-border/60">
+      <div className="h-14 flex items-center px-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2.5">
-          <div className="h-6 w-6 rounded-md bg-primary flex items-center justify-center shrink-0">
-            <Zap className="h-3.5 w-3.5 text-primary-foreground fill-primary-foreground" />
+          <div className="h-[26px] w-[26px] rounded-[7px] bg-primary flex items-center justify-center shrink-0 shadow-[0_0_12px_-2px] shadow-primary/40">
+            <Zap className="h-[13px] w-[13px] text-primary-foreground fill-primary-foreground" />
           </div>
-          <span className="font-semibold text-sm tracking-tight text-foreground">TaskFlow</span>
+          <span className="font-semibold text-[13.5px] tracking-[-0.01em] text-foreground">TaskFlow</span>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 p-2 space-y-0.5">
+      <nav className="flex-1 px-2 py-3 space-y-px">
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "?");
           return (
             <Link key={href} href={href}>
               <div className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150",
+                "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 cursor-pointer",
                 active
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  ? "bg-primary/[0.14] text-primary"
+                  : "text-muted-foreground hover:text-foreground/90 hover:bg-white/[0.055]"
               )}>
-                <Icon className={cn("h-4 w-4 shrink-0", active ? "text-primary" : "")} />
+                <Icon className={cn("h-[15px] w-[15px] shrink-0", !active && "opacity-70")} />
                 {label}
               </div>
             </Link>
@@ -48,23 +48,23 @@ export function Sidebar() {
       </nav>
 
       {/* Bottom */}
-      <div className="p-2 border-t border-border/60 space-y-0.5">
+      <div className="px-2 py-2.5 border-t border-sidebar-border space-y-px">
         <Link href="/settings">
           <div className={cn(
-            "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150",
+            "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 cursor-pointer",
             pathname.startsWith("/settings")
-              ? "bg-primary/15 text-primary"
-              : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+              ? "bg-primary/[0.14] text-primary"
+              : "text-muted-foreground hover:text-foreground/90 hover:bg-white/[0.055]"
           )}>
-            <Settings className="h-4 w-4 shrink-0" />
+            <Settings className={cn("h-[15px] w-[15px] shrink-0", !pathname.startsWith("/settings") && "opacity-70")} />
             Settings
           </div>
         </Link>
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors duration-150"
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-muted-foreground hover:text-foreground/90 hover:bg-white/[0.055] transition-all duration-150"
         >
-          <LogOut className="h-4 w-4 shrink-0" />
+          <LogOut className="h-[15px] w-[15px] shrink-0 opacity-70" />
           Sign out
         </button>
       </div>

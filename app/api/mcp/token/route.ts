@@ -27,11 +27,17 @@ async function parseBody(req: NextRequest): Promise<URLSearchParams | null> {
 }
 
 function extractBasicSecret(req: NextRequest): string | null {
-  const auth = req.headers.get("authorization") ?? "";
-  if (!auth.startsWith("Basic ")) return null;
-  const decoded = Buffer.from(auth.slice(6), "base64").toString("utf-8");
-  const colon = decoded.indexOf(":");
-  return colon !== -1 ? decoded.slice(colon + 1) || null : decoded || null;
+  try {
+    const auth = req.headers.get("authorization") ?? "";
+    if (!auth.startsWith("Basic ")) return null;
+    const decoded = Buffer.from(auth.slice(6), "base64").toString("utf-8");
+    const colon = decoded.indexOf(":");
+    if (colon === -1) return null; // malformed — no colon means no password field
+    const secret = decoded.slice(colon + 1).trim();
+    return secret || null;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -52,8 +58,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "invalid_grant", error_description: "Code is invalid or expired" }, { status: 401 });
     }
 
-    // Verify PKCE
-    if (payload.codeChallenge && codeVerifier) {
+    // Verify PKCE — if the code was issued with a challenge, a verifier is required
+    if (payload.codeChallenge) {
+      if (!codeVerifier) {
+        return NextResponse.json({ error: "invalid_grant", error_description: "code_verifier is required" }, { status: 401 });
+      }
       const challenge = createHash("sha256").update(codeVerifier).digest("base64url");
       if (challenge !== payload.codeChallenge) {
         return NextResponse.json({ error: "invalid_grant", error_description: "PKCE verification failed" }, { status: 401 });

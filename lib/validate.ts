@@ -4,12 +4,26 @@ export const TaskStatusEnum = z.enum(["INBOX", "SCHEDULED", "COMPLETED", "CANCEL
 export const PriorityEnum = z.enum(["LOW", "MEDIUM", "HIGH"]);
 export const TaskSourceEnum = z.enum(["MANUAL", "API", "RECURRING"]);
 
+function startOfTodayUTC() {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+const futureDatetime = z
+  .string()
+  .datetime()
+  .refine(
+    (val) => new Date(val) >= startOfTodayUTC(),
+    "Cannot schedule a task in the past"
+  );
+
 export const CreateTaskSchema = z.object({
   title: z.string().min(1, "Title is required").max(500),
   description: z.string().max(5000).optional(),
   notes: z.string().max(10000).optional(),
   priority: PriorityEnum.optional().default("MEDIUM"),
-  scheduledDate: z.string().datetime().optional(),
+  scheduledDate: futureDatetime.optional(),
   startTime: z
     .string()
     .regex(/^\d{2}:\d{2}$/, "startTime must be HH:MM")
@@ -24,7 +38,7 @@ export const UpdateTaskSchema = z.object({
   notes: z.string().max(10000).optional().nullable(),
   priority: PriorityEnum.optional(),
   status: TaskStatusEnum.optional(),
-  scheduledDate: z.string().datetime().optional().nullable(),
+  scheduledDate: futureDatetime.optional().nullable(),
   startTime: z
     .string()
     .regex(/^\d{2}:\d{2}$/)
