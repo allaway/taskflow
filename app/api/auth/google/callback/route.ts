@@ -1,62 +1,73 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getOAuth2Client } from "@/lib/googleAuth";
 import { encrypt } from "@/lib/crypto";
 import { google } from "googleapis";
+
+function getBaseUrl(req: NextRequest): string {
+  const proto = req.headers.get("x-forwarded-proto") ?? "https";
+  const host  = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  if (host) return `${proto}://${host}`;
+  return process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+}
 
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/login`);
+    return NextResponse.redirect(`${getBaseUrl(req)}/login`);
   }
 
   const { searchParams } = new URL(req.url);
-  const code = searchParams.get("code");
+  const code  = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  // User denied or something went wrong on Google's side
+  const baseUrl     = getBaseUrl(req);
+  const settingsUrl = `${baseUrl}/settings?tab=calendar`;
+
   if (error || !code) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/settings?tab=calendar&error=access_denied`);
+    return NextResponse.redirect(`${settingsUrl}&error=access_denied`);
   }
 
-  // Validate state to prevent CSRF
   const storedState = req.cookies.get("google_oauth_state")?.value;
   if (!storedState || storedState !== state) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/settings?tab=calendar&error=invalid_state`);
+    return NextResponse.redirect(`${settingsUrl}&error=invalid_state`);
   }
 
   try {
-    const oauth2Client = getOAuth2Client();
+    const redirectUri  = `${baseUrl}/api/auth/google/callback`;
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri,
+    );
+
     const { tokens } = await oauth2Client.getToken(code);
 
     if (!tokens.access_token || !tokens.refresh_token) {
-      return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/settings?tab=calendar&error=missing_tokens`);
+      return NextResponse.redirect(`${settingsUrl}&error=missing_tokens`);
     }
 
-    // Fetch the Google account email
     oauth2Client.setCredentials(tokens);
-    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
-    const userInfo = await oauth2.userinfo.get();
+    const oauth2Api = google.oauth2({ version: "v2", auth: oauth2Client });
+    const userInfo  = await oauth2Api.userinfo.get();
     const googleEmail = userInfo.data.email ?? null;
 
     await prisma.user.update({
       where: { id: session.user.id },
       data: {
-        googleAccessToken: encrypt(tokens.access_token),
+        googleAccessToken:  encrypt(tokens.access_token),
         googleRefreshToken: encrypt(tokens.refresh_token),
-        googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        googleTokenExpiry:  tokens.expiry_date ? new Date(tokens.expiry_date) : null,
         googleEmail,
       },
     });
 
-    const response = NextResponse.redirect(`${process.env.NEXTAUTH_URL}/settings?tab=calendar&connected=1`);
-    // Clear the state cookie
+    const response = NextResponse.redirect(`${settingsUrl}&connected=1`);
     response.cookies.set("google_oauth_state", "", { maxAge: 0, path: "/" });
     return response;
   } catch (err) {
     console.error("[google-oauth] Callback error:", err);
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/settings?tab=calendar&error=server_error`);
+    return NextResponse.redirect(`${settingsUrl}&error=server_error`);
   }
 }

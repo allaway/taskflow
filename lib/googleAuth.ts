@@ -1,22 +1,11 @@
 import { google } from "googleapis";
 
+/** Creates an OAuth2 client used for API calls (not the initial auth flow). */
 export function getOAuth2Client() {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    `${process.env.NEXTAUTH_URL}/api/auth/google/callback`
+    // redirect_uri is not needed for token refresh — only for the initial code exchange
+    undefined,
   );
-}
-
-export function generateGoogleAuthUrl(state: string) {
-  const client = getOAuth2Client();
-  return client.generateAuthUrl({
-    access_type: "offline",
-    scope: [
-      "https://www.googleapis.com/auth/calendar.readonly",
-      "https://www.googleapis.com/auth/userinfo.email",
-    ],
-    state,
-    prompt: "consent", // always returns a refresh_token
-  });
 }
