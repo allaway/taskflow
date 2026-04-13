@@ -41,6 +41,8 @@ export async function GET(req: NextRequest) {
   });
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  console.log("[google-oauth] redirect_uri:", redirectUri);
+  console.log("[google-oauth] auth url:", authUrl);
 
   const response = NextResponse.redirect(authUrl);
   response.cookies.set("google_oauth_state", state, {
