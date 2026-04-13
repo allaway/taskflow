@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { format, addWeeks, subWeeks, startOfWeek, addDays, isToday, startOfDay } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -10,6 +10,7 @@ import type { Task } from "@prisma/client";
 import { TaskEditModal } from "@/components/tasks/TaskEditModal";
 import type { CalendarEvent } from "@/app/api/calendar/events/route";
 import { fetchCalendarEvents } from "@/lib/calendarClient";
+import { CalendarEventPopover } from "@/components/calendar/CalendarEventPopover";
 import {
   DndContext,
   PointerSensor,
@@ -63,6 +64,9 @@ export default function WeekPage() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [selectedCalEvent, setSelectedCalEvent] = useState<CalendarEvent | null>(null);
+  const [calEventAnchor, setCalEventAnchor] = useState<{ x: number; y: number } | null>(null);
+  const closeCalEvent = useCallback(() => { setSelectedCalEvent(null); setCalEventAnchor(null); }, []);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -214,19 +218,23 @@ export default function WeekPage() {
                 <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
                   {/* Calendar events */}
                   {!loading && dayEvents.map((event) => (
-                    <div
+                    <button
                       key={event.id}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border-l-2"
+                      className="w-full text-left flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border-l-2 hover:opacity-100 opacity-85 transition-opacity"
                       style={{
                         backgroundColor: event.color + "18",
                         borderColor: event.color,
                       }}
-                      title={`${event.title} · ${event.calendarName}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedCalEvent(event);
+                        setCalEventAnchor({ x: e.clientX, y: e.clientY });
+                      }}
                     >
                       <span className="truncate text-[11px] leading-relaxed font-medium" style={{ color: event.color }}>
                         {event.allDay ? "·" : format(new Date(event.start), "h:mm")} {event.title}
                       </span>
-                    </div>
+                    </button>
                   ))}
                   {loading ? (
                     <div className="h-6 rounded bg-muted/40 animate-pulse mx-1" />
@@ -292,6 +300,15 @@ export default function WeekPage() {
         onUpdate={updateTask}
         onDelete={deleteTask}
       />
+
+      {/* Calendar event detail popover */}
+      {selectedCalEvent && calEventAnchor && (
+        <CalendarEventPopover
+          event={selectedCalEvent}
+          anchorPos={calEventAnchor}
+          onClose={closeCalEvent}
+        />
+      )}
     </div>
   );
 }

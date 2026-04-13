@@ -33,8 +33,12 @@ model User {
   // Label palette — JSON array of {name, color}
   labelPalette     String?  // JSON
 
-  tasks            Task[]
-  apiTokens        ApiToken[]
+  // Calendar sync timestamp
+  calendarSyncedAt DateTime?
+
+  tasks                Task[]
+  apiTokens            ApiToken[]
+  cachedCalendarEvents CachedCalendarEvent[]
 }
 
 model Task {
@@ -86,6 +90,24 @@ enum TaskSource {
   MANUAL
   API
   RECURRING
+}
+
+model CachedCalendarEvent {
+  id           String   @id  // "${userId}:${googleEventId}"
+  userId       String
+  title        String
+  start        DateTime
+  end          DateTime
+  allDay       Boolean  @default(false)
+  calendarName String
+  color        String   @default("#6366f1")
+  description  String?
+  location     String?
+  meetLink     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, start])
 }
 
 model ApiToken {

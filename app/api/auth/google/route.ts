@@ -26,7 +26,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "GOOGLE_CLIENT_ID not configured" }, { status: 500 });
   }
 
-  // Build the URL manually to guarantee all parameters are present
   const params = new URLSearchParams({
     client_id:     clientId,
     redirect_uri:  redirectUri,
@@ -41,13 +40,14 @@ export async function GET(req: NextRequest) {
   console.log("[google-oauth] redirect_uri:", redirectUri);
   console.log("[google-oauth] auth url:", authUrl);
 
-  const response = NextResponse.redirect(authUrl);
-  response.cookies.set("google_oauth_state", state, {
+  // Return URL as JSON — client navigates directly to avoid Next.js stripping redirect params
+  const res = NextResponse.json({ url: authUrl });
+  res.cookies.set("google_oauth_state", state, {
     httpOnly: true,
     secure:   process.env.NODE_ENV === "production",
     maxAge:   600,
     path:     "/",
     sameSite: "lax",
   });
-  return response;
+  return res;
 }

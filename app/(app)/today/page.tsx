@@ -26,6 +26,7 @@ import {
 import type { Task } from "@prisma/client";
 import type { CalendarEvent } from "@/app/api/calendar/events/route";
 import { fetchCalendarEvents } from "@/lib/calendarClient";
+import { CalendarEventPopover } from "@/components/calendar/CalendarEventPopover";
 
 const HOUR_HEIGHT = 60;
 const START_HOUR = 6;
@@ -33,6 +34,44 @@ const END_HOUR = 23;
 const SLOT_MINUTES = 15;
 const HOURS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => i + START_HOUR);
 const TOTAL_SLOTS = ((END_HOUR - START_HOUR + 1) * 60) / SLOT_MINUTES;
+
+// ─── Overlap layout ───────────────────────────────────────────────────────────
+interface LayoutEvent extends CalendarEvent {
+  column: number;
+  totalColumns: number;
+}
+
+function computeOverlapLayout(events: CalendarEvent[]): LayoutEvent[] {
+  const timed = events.filter((e) => !e.allDay);
+  const sorted = [...timed].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  const result: LayoutEvent[] = sorted.map((e) => ({ ...e, column: 0, totalColumns: 1 }));
+  const columnEnds: number[] = [];
+
+  for (const event of result) {
+    const startMs = new Date(event.start).getTime();
+    const endMs   = new Date(event.end).getTime();
+    let col = columnEnds.findIndex((end) => end <= startMs);
+    if (col === -1) { col = columnEnds.length; columnEnds.push(endMs); }
+    else columnEnds[col] = endMs;
+    event.column = col;
+  }
+
+  for (let i = 0; i < result.length; i++) {
+    const ev = result[i];
+    const startMs = new Date(ev.start).getTime();
+    const endMs   = new Date(ev.end).getTime();
+    let maxCol = ev.column;
+    for (const other of result) {
+      if (other === ev) continue;
+      if (new Date(other.start).getTime() < endMs && new Date(other.end).getTime() > startMs) {
+        maxCol = Math.max(maxCol, other.column);
+      }
+    }
+    ev.totalColumns = maxCol + 1;
+  }
+
+  return result;
+}
 
 function timeToMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
@@ -183,6 +222,8 @@ export default function TodayPage() {
   const [nowPx, setNowPx] = useState<number | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [selectedCalEvent, setSelectedCalEvent] = useState<CalendarEvent | null>(null);
+  const [calEventAnchor, setCalEventAnchor] = useState<{ x: number; y: number } | null>(null);
   const [planningOpen, setPlanningOpen] = useState(false);
   const [shutdownOpen, setShutdownOpen] = useState(false);
   const [dailyBudgetHours, setDailyBudgetHours] = useState(8);
@@ -478,9 +519,8 @@ export default function TodayPage() {
                 </div>
               )}
 
-              {/* Google Calendar events (read-only) */}
-              {!loading && calendarEvents.map((event) => {
-                if (event.allDay) return null;
+              {/* Google Calendar events */}
+              {!loading && computeOverlapLayout(calendarEvents).map((event) => {
                 const eventStart = new Date(event.start);
                 const eventEnd   = new Date(event.end);
                 const startMins  = eventStart.getHours() * 60 + eventStart.getMinutes() - START_HOUR * 60;
@@ -488,27 +528,42 @@ export default function TodayPage() {
                 const height     = Math.max(((endMins - startMins) / 60) * HOUR_HEIGHT, 24);
                 const top        = (startMins / 60) * HOUR_HEIGHT;
                 if (startMins < 0 || startMins > (END_HOUR - START_HOUR) * 60) return null;
+                const colPct      = (1 / event.totalColumns) * 100;
+                const leftPct     = (event.column / event.totalColumns) * 100;
                 return (
                   <div
                     key={event.id}
-                    className="absolute left-14 right-4 pointer-events-none"
+                    className="absolute left-14 right-4"
                     style={{ top: `${top}px`, height: `${height}px`, zIndex: 5 }}
                   >
-                    <div
-                      className="h-full rounded-md px-2 py-1 overflow-hidden border-l-2 opacity-80"
-                      style={{
-                        backgroundColor: event.color + "22",
-                        borderColor: event.color,
+                    <button
+                      className="absolute inset-y-0 text-left"
+                      style={{ left: `${leftPct}%`, width: `calc(${colPct}% - 2px)` }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedCalEvent(event);
+                        setCalEventAnchor({ x: e.clientX, y: e.clientY });
                       }}
                     >
-                      <p className="text-[11px] font-medium leading-tight truncate" style={{ color: event.color }}>
-                        {event.title}
-                      </p>
-                      <p className="text-[10px] opacity-70 leading-tight" style={{ color: event.color }}>
-                        {format(new Date(event.start), "h:mm")}–{format(new Date(event.end), "h:mm a")}
-                        {" · "}{event.calendarName}
-                      </p>
-                    </div>
+                      <div
+                        className="h-full w-full rounded-md px-2 py-1 overflow-hidden border-l-2 opacity-80 hover:opacity-100 transition-opacity"
+                        style={{ backgroundColor: event.color + "22", borderColor: event.color }}
+                      >
+                        <p className="text-[11px] font-medium leading-tight truncate" style={{ color: event.color }}>
+                          {event.title}
+                        </p>
+                        {height > 36 && (
+                          <p className="text-[10px] opacity-70 leading-tight" style={{ color: event.color }}>
+                            {format(new Date(event.start), "h:mm")}–{format(new Date(event.end), "h:mm a")}
+                          </p>
+                        )}
+                        {event.meetLink && height > 48 && (
+                          <p className="text-[10px] opacity-60 leading-tight" style={{ color: event.color }}>
+                            Video call
+                          </p>
+                        )}
+                      </div>
+                    </button>
                   </div>
                 );
               })}
@@ -632,6 +687,15 @@ export default function TodayPage() {
         completedToday={completedToday}
         onDone={fetchTasks}
       />
+
+      {/* Calendar event detail popover */}
+      {selectedCalEvent && calEventAnchor && (
+        <CalendarEventPopover
+          event={selectedCalEvent}
+          anchorPos={calEventAnchor}
+          onClose={() => { setSelectedCalEvent(null); setCalEventAnchor(null); }}
+        />
+      )}
     </DndContext>
   );
 }

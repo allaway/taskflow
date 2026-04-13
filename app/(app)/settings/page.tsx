@@ -388,7 +388,11 @@ export default function SettingsPage() {
                 <Button
                   size="sm"
                   className="h-8 text-xs gap-1.5"
-                  onClick={() => { window.location.href = "/api/auth/google"; }}
+                  onClick={async () => {
+                    const res = await fetch("/api/auth/google");
+                    const data = await res.json();
+                    if (data.url) window.location.href = data.url;
+                  }}
                 >
                   <Link2 className="h-3.5 w-3.5" />
                   Connect Google Calendar
