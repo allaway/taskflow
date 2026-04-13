@@ -32,7 +32,6 @@ export async function GET(req: NextRequest) {
     response_type: "code",
     scope:         SCOPES,
     access_type:   "offline",
-    prompt:        "consent",
     state,
   });
 

@@ -46,21 +46,37 @@ export async function GET(req: NextRequest) {
     );
 
     const { tokens } = await oauth2Client.getToken(code);
+    console.log("[google-callback] tokens received — access:", !!tokens.access_token, "refresh:", !!tokens.refresh_token);
 
-    if (!tokens.access_token || !tokens.refresh_token) {
+    if (!tokens.access_token) {
       return NextResponse.redirect(`${settingsUrl}&error=missing_tokens`);
     }
 
-    oauth2Client.setCredentials(tokens);
-    const googleEmail: string | null = null;
+    // Fetch the existing refresh token if Google didn't return a new one
+    // (happens when prompt=consent is omitted and user already granted offline access)
+    let refreshToken = tokens.refresh_token;
+    if (!refreshToken) {
+      const existing = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { googleRefreshToken: true },
+      });
+      refreshToken = existing?.googleRefreshToken
+        ? existing.googleRefreshToken  // already encrypted, re-use as-is
+        : null;
+      // If we truly have no refresh token, we need re-consent
+      if (!refreshToken) {
+        return NextResponse.redirect(`${settingsUrl}&error=missing_tokens`);
+      }
+    }
 
     await prisma.user.update({
       where: { id: session.user.id },
       data: {
         googleAccessToken:  encrypt(tokens.access_token),
-        googleRefreshToken: encrypt(tokens.refresh_token),
+        // Only overwrite refresh token if Google issued a new one
+        ...(tokens.refresh_token ? { googleRefreshToken: encrypt(tokens.refresh_token) } : {}),
         googleTokenExpiry:  tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-        googleEmail,
+        googleEmail:        null,
       },
     });
 
