@@ -4,7 +4,8 @@ import { auth } from "@/lib/auth";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
-  "https://www.googleapis.com/auth/userinfo.email",
+  "openid",
+  "email",
 ].join(" ");
 
 function getBaseUrl(req: NextRequest): string {
