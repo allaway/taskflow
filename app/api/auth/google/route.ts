@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 
 const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
 
@@ -26,6 +27,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "GOOGLE_CLIENT_ID not configured" }, { status: 500 });
   }
 
+  // Only force consent re-approval (which issues a fresh refresh token) when
+  // the user has no refresh token stored. Forcing it unconditionally triggers a
+  // Google-side error ("Something went wrong") on testing-mode apps with
+  // sensitive scopes when the user has previously authorized the app.
+  const existing = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { googleRefreshToken: true },
+  });
+  const hasRefreshToken = !!existing?.googleRefreshToken;
+
   const params = new URLSearchParams({
     client_id:     clientId,
     redirect_uri:  redirectUri,
@@ -33,6 +44,10 @@ export async function GET(req: NextRequest) {
     scope:         SCOPES,
     access_type:   "offline",
     state,
+    // prompt=consent forces Google to issue a new refresh token, but causes
+    // "Something went wrong" when re-authorizing with testing-mode apps.
+    // Only use it on first connect (no stored refresh token).
+    ...(hasRefreshToken ? {} : { prompt: "consent" }),
   });
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
