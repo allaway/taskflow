@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { auth } from "@/lib/auth";
 
-const SCOPES = [
-  "https://www.googleapis.com/auth/calendar.readonly",
-  "openid",
-  "email",
-].join(" ");
+const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
 
 function getBaseUrl(req: NextRequest): string {
   const proto = req.headers.get("x-forwarded-proto") ?? "https";

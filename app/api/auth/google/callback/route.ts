@@ -49,17 +49,7 @@ export async function GET(req: NextRequest) {
     }
 
     oauth2Client.setCredentials(tokens);
-    // Extract email from id_token payload (no extra API call needed)
-    let googleEmail: string | null = null;
-    if (tokens.id_token) {
-      const payload = JSON.parse(Buffer.from(tokens.id_token.split(".")[1], "base64url").toString());
-      googleEmail = payload.email ?? null;
-    }
-    if (!googleEmail) {
-      const oauth2Api = google.oauth2({ version: "v2", auth: oauth2Client });
-      const userInfo  = await oauth2Api.userinfo.get();
-      googleEmail = userInfo.data.email ?? null;
-    }
+    const googleEmail: string | null = null;
 
     await prisma.user.update({
       where: { id: session.user.id },
