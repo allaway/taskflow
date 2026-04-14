@@ -268,7 +268,7 @@ export default function TodayPage() {
       setLoading(false);
     });
 
-    fetchCalendarEvents(dateStr, dateStr).then(({ events, feedErrors: _ }) => {
+    fetchCalendarEvents(dateStr, dateStr).then(({ events }) => {
       if (!active) return;
       setCalendarEvents(Array.isArray(events) ? events : []);
     }).catch(() => {/* silent */});
