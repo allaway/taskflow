@@ -51,8 +51,6 @@ export async function GET(req: NextRequest) {
   });
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-  console.log("[google-oauth] redirect_uri:", redirectUri);
-  console.log("[google-oauth] auth url:", authUrl);
 
   // Return URL as JSON — client navigates directly to avoid Next.js stripping redirect params
   const res = NextResponse.json({ url: authUrl });

@@ -263,13 +263,15 @@ export default function TodayPage() {
       if (inboxRes.ok) setInboxTasks(await inboxRes.json());
       if (completedRes.ok) setCompletedToday(await completedRes.json());
       setLoading(false);
+    }).catch(() => {
+      if (!active) return;
+      setLoading(false);
     });
 
-    fetchCalendarEvents(dateStr, dateStr).then(({ events, feedErrors }) => {
+    fetchCalendarEvents(dateStr, dateStr).then(({ events, feedErrors: _ }) => {
       if (!active) return;
-      setCalendarEvents(events);
-      if (feedErrors.length) console.warn("[calendar] Feed errors:", feedErrors);
-    }).catch((err) => console.warn("[calendar]", err));
+      setCalendarEvents(Array.isArray(events) ? events : []);
+    }).catch(() => {/* silent */});
     return () => { active = false; };
   }, [dateStr, refresh]);
 

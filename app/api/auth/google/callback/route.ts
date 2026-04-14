@@ -12,10 +12,8 @@ function getBaseUrl(req: NextRequest): string {
 }
 
 export async function GET(req: NextRequest) {
-  console.log("[google-callback] hit:", req.url);
   const session = await auth();
   if (!session?.user?.id) {
-    console.log("[google-callback] no session, redirecting to login");
     return NextResponse.redirect(`${getBaseUrl(req)}/login`);
   }
 
@@ -23,7 +21,6 @@ export async function GET(req: NextRequest) {
   const code  = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
-  console.log("[google-callback] params — code:", !!code, "state:", !!state, "error:", error);
 
   const baseUrl     = getBaseUrl(req);
   const settingsUrl = `${baseUrl}/settings?tab=calendar`;
@@ -46,7 +43,6 @@ export async function GET(req: NextRequest) {
     );
 
     const { tokens } = await oauth2Client.getToken(code);
-    console.log("[google-callback] tokens received — access:", !!tokens.access_token, "refresh:", !!tokens.refresh_token);
 
     if (!tokens.access_token) {
       return NextResponse.redirect(`${settingsUrl}&error=missing_tokens`);
