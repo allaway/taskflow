@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 import { useEffect, useState, useRef } from "react";
 import { format, addDays, subDays, startOfDay, isToday } from "date-fns";
 import { Button } from "@/components/ui/button";
