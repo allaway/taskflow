@@ -63,6 +63,7 @@ model Task {
 
   completedAt   DateTime?  // set when status → COMPLETED
   daysOverdue   Int        @default(0)  // incremented each time task slides forward
+  agentQueued   Boolean    @default(false)  // task is queued for an AI agent to pick up
 
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt

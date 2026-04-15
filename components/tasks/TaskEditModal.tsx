@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, X, Tag, Pencil, Check } from "lucide-react";
+import { Trash2, X, Tag, Pencil, Check, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Task } from "@prisma/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
+import { SendToClaudeModal } from "./SendToClaudeModal";
 
 interface LabelEntry { name: string; color: string; }
 
@@ -142,6 +143,8 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
   const [labelInput, setLabelInput] = useState("");
   const [labelPalette, setLabelPalette] = useState<LabelEntry[]>([]);
   const [saving, setSaving] = useState(false);
+  const [sendToClaudeOpen, setSendToClaudeOpen] = useState(false);
+  const [agentQueuing, setAgentQueuing] = useState(false);
 
   useEffect(() => {
     fetch("/api/labels").then(r => r.ok ? r.json() : []).then(setLabelPalette);
@@ -231,7 +234,15 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
     onOpenChange(false);
   }
 
+  async function handleSendToAgent() {
+    setAgentQueuing(true);
+    await onUpdate(task!.id, { agentQueued: true } as Partial<Task>);
+    setAgentQueuing(false);
+    setSendToClaudeOpen(true);
+  }
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
         {/* Header */}
@@ -423,15 +434,28 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-border/40 shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-            onClick={handleDelete}
-          >
-            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-            Delete
-          </Button>
+          <div className="flex gap-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={handleDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              Delete
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={handleSendToAgent}
+              disabled={agentQueuing}
+              title="Send to Claude Code or Claude.ai"
+            >
+              <Bot className="h-3.5 w-3.5 mr-1.5" />
+              {agentQueuing ? "Queuing…" : "Send to Claude"}
+            </Button>
+          </div>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
               Cancel
@@ -443,5 +467,14 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
         </div>
       </DialogContent>
     </Dialog>
+
+    {task && (
+      <SendToClaudeModal
+        task={task}
+        open={sendToClaudeOpen}
+        onOpenChange={setSendToClaudeOpen}
+      />
+    )}
+    </>
   );
 }

@@ -47,6 +47,7 @@ export const UpdateTaskSchema = z.object({
   duration: z.number().int().min(5).max(480).optional().nullable(),
   recurringRule: z.string().max(100).optional().nullable(),
   labels: z.array(z.string().min(1).max(50)).optional().nullable(),
+  agentQueued: z.boolean().optional(),
 });
 
 export const WebhookTaskSchema = z.object({

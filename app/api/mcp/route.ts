@@ -84,6 +84,7 @@ const TOOLS = [
         scheduledDate: { type: "string" },
         startTime: { type: "string" },
         duration: { type: "number" },
+        agentQueued: { type: "boolean", description: "Whether the task is queued for an AI agent" },
       },
       required: ["id"],
     },
@@ -103,6 +104,20 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       properties: { id: { type: "string" } },
+      required: ["id"],
+    },
+  },
+  {
+    name: "get_agent_tasks",
+    description: "Get tasks that have been queued for an AI agent to work on. Call this to find tasks assigned to you.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "claim_agent_task",
+    description: "Claim a queued agent task so you can work on it. This dequeues the task so other agents won't also pick it up.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Task ID to claim" } },
       required: ["id"],
     },
   },
@@ -173,6 +188,7 @@ async function callTool(
     if (args.status !== undefined) data.status = args.status;
     if (args.startTime !== undefined) data.startTime = args.startTime ? String(args.startTime) : null;
     if (args.duration !== undefined) data.duration = args.duration ? Number(args.duration) : null;
+    if (args.agentQueued !== undefined) data.agentQueued = Boolean(args.agentQueued);
     if ("scheduledDate" in args) {
       data.scheduledDate = args.scheduledDate ? new Date(String(args.scheduledDate)) : null;
     }
@@ -193,6 +209,23 @@ async function callTool(
     if (!existing) throw new Error("Task not found");
     await prisma.task.delete({ where: { id: String(args.id) } });
     return { success: true };
+  }
+
+  if (name === "get_agent_tasks") {
+    return prisma.task.findMany({
+      where: { userId, agentQueued: true },
+      orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+    });
+  }
+
+  if (name === "claim_agent_task") {
+    const existing = await prisma.task.findFirst({ where: { id: String(args.id), userId } });
+    if (!existing) throw new Error("Task not found");
+    if (!existing.agentQueued) throw new Error("Task is not queued for an agent");
+    return prisma.task.update({
+      where: { id: String(args.id) },
+      data: { agentQueued: false },
+    });
   }
 
   throw new Error(`Unknown tool: ${name}`);

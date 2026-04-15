@@ -39,6 +39,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (parsed.data.labels !== undefined) {
     data.labels = parsed.data.labels ? JSON.stringify(parsed.data.labels) : null;
   }
+  if (parsed.data.agentQueued !== undefined) {
+    data.agentQueued = parsed.data.agentQueued;
+  }
   if (parsed.data.status === "SCHEDULED" && !data.scheduledDate && !existing.scheduledDate) {
     return NextResponse.json({ error: "scheduledDate required when setting status to SCHEDULED" }, { status: 400 });
   }
