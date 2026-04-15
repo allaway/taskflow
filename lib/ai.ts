@@ -103,10 +103,9 @@ Rules:
 - Use the provided duration for each task (default 30 min if not specified)
 - If tasks don't all fit today, omit lower-priority ones rather than violating the above rules
 
-Respond with ONLY a valid JSON array in this exact format, no explanation:
+Output ONLY the raw JSON array below — no markdown, no code fences, no explanation, nothing else:
 [
-  { "taskId": "cuid_here", "startTime": "HH:MM", "duration": 30 },
-  ...
+  { "taskId": "cuid_here", "startTime": "HH:MM", "duration": 30 }
 ]`;
 }
 

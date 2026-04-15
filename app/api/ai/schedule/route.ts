@@ -119,7 +119,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `AI error: ${msg}` }, { status: 502 });
   }
 
-  const jsonMatch = raw.match(/\[[\s\S]*\]/);
+  // Strip markdown code fences, then find the JSON array of objects
+  const cleaned = raw.replace(/```[\w]*\n?/g, "").replace(/```/g, "");
+  // Specifically match an array that starts/ends with objects (avoids matching [bracketed text])
+  const jsonMatch = cleaned.match(/\[\s*\{[\s\S]*\}\s*\]/);
   if (!jsonMatch) {
     return NextResponse.json({ error: "AI returned an unexpected format" }, { status: 502 });
   }
