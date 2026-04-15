@@ -75,6 +75,7 @@ export const AiScheduleSchema = z.object({
     .regex(/^\d{2}:\d{2}$/)
     .optional()
     .default("18:00"),
+  timezone: z.string().optional().default("UTC"),
 });
 
 export const AiPromptSchema = z.object({

@@ -35,7 +35,10 @@ export function ScheduleModal({ open, onOpenChange, date, tasks, onAccept }: Sch
     const res = await fetch("/api/ai/schedule", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: format(date, "yyyy-MM-dd") }),
+      body: JSON.stringify({
+        date: format(date, "yyyy-MM-dd"),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
     });
     const data = await res.json();
     setLoading(false);
@@ -73,7 +76,7 @@ export function ScheduleModal({ open, onOpenChange, date, tasks, onAccept }: Sch
             AI Schedule — {format(date, "EEEE, MMM d")}
           </DialogTitle>
           <DialogDescription>
-            {tasks.filter((t) => t.status === "INBOX").length} inbox task{tasks.filter((t) => t.status === "INBOX").length !== 1 ? "s" : ""} to schedule
+            {tasks.filter((t) => t.status === "INBOX").length} inbox task{tasks.filter((t) => t.status === "INBOX").length !== 1 ? "s" : ""} · fits tasks around your calendar meetings
           </DialogDescription>
         </DialogHeader>
 

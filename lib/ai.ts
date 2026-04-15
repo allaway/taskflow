@@ -66,13 +66,14 @@ export async function callAi(config: AiProviderConfig, prompt: string): Promise<
 }
 
 /**
- * Builds the AI scheduling prompt from tasks and time constraints.
+ * Builds the AI scheduling prompt from tasks, time constraints, and blocked slots.
  */
 export function buildSchedulePrompt(
   tasks: Pick<Task, "id" | "title" | "description" | "priority" | "duration">[],
   date: string,
   workStartTime: string,
-  workEndTime: string
+  workEndTime: string,
+  blockedSlots: { start: string; end: string; label: string }[] = []
 ): string {
   const taskList = tasks
     .map(
@@ -81,19 +82,26 @@ export function buildSchedulePrompt(
     )
     .join("\n");
 
+  const blockedSection = blockedSlots.length > 0
+    ? `\nBlocked time slots (do NOT schedule any task during these — treat them as immovable):\n${
+        blockedSlots.map((s) => `- ${s.start}–${s.end}: "${s.label}"`).join("\n")
+      }\n`
+    : "";
+
   return `You are a productivity assistant helping schedule tasks for ${date}.
 
 Working hours: ${workStartTime} to ${workEndTime}
-
+${blockedSection}
 Tasks to schedule:
 ${taskList}
 
 Rules:
-- Schedule all tasks within working hours
-- Higher priority tasks should be scheduled earlier
-- Leave 10-minute breaks between tasks
-- Duration defaults to 30 minutes if not specified
-- Do not overlap tasks
+- Schedule ALL tasks within working hours (${workStartTime}–${workEndTime})
+- Never schedule a task that overlaps with a blocked slot — find the open gaps between them
+- Higher priority tasks should be scheduled earlier in the day when possible
+- Leave a 10-minute buffer between consecutive tasks and between tasks and blocked slots
+- Use the provided duration for each task (default 30 min if not specified)
+- If tasks don't all fit today, omit lower-priority ones rather than violating the above rules
 
 Respond with ONLY a valid JSON array in this exact format, no explanation:
 [
