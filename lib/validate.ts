@@ -96,6 +96,8 @@ export const UserSettingsSchema = z.object({
   aiSchedulingModel: z.string().max(200).optional(),
   dailyBudgetHours: z.number().int().min(1).max(24).optional(),
   labelPalette: z.array(z.object({ name: z.string().min(1).max(50), color: z.string().regex(/^#[0-9a-fA-F]{6}$/) })).optional(),
+  claudeCodeRoutineId: z.string().max(200).optional().nullable(),
+  claudeCodeRoutineToken: z.string().max(500).optional().nullable(),
 });
 
 export type CreateTaskInput = z.infer<typeof CreateTaskSchema>;

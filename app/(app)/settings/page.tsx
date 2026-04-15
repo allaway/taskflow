@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Bot, Key, User, Loader2, CheckCircle2, Eye, EyeOff, Trash2, Plus, Copy, CalendarDays, Link2, Link2Off } from "lucide-react";
+import { Bot, Key, User, Loader2, CheckCircle2, Eye, EyeOff, Trash2, Plus, Copy, CalendarDays, Link2, Link2Off, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
 interface UserSettings {
@@ -20,6 +20,9 @@ interface UserSettings {
   dailyBudgetHours: number;
   googleCalendarConnected: boolean;
   googleEmail: string | null;
+  claudeCodeRoutineId: string | null;
+  claudeCodeRoutineToken: string | null;
+  hasClaudeCodeRoutine: boolean;
 }
 
 interface ApiToken {
@@ -66,6 +69,10 @@ export default function SettingsPage() {
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiModel, setAiModel] = useState("");
   const [aiSchedulingModel, setAiSchedulingModel] = useState("");
+  const [routineId, setRoutineId] = useState("");
+  const [routineToken, setRoutineToken] = useState("");
+  const [showRoutineToken, setShowRoutineToken] = useState(false);
+  const [savingRoutine, setSavingRoutine] = useState(false);
 
   // Google Calendar OAuth state
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -93,6 +100,8 @@ export default function SettingsPage() {
         setDailyBudgetHours(data.dailyBudgetHours ?? 8);
         setGoogleConnected(data.googleCalendarConnected ?? false);
         setGoogleEmail(data.googleEmail ?? null);
+        setRoutineId(data.claudeCodeRoutineId ?? "");
+        setRoutineToken(data.claudeCodeRoutineToken ?? "");
         setLoading(false);
 
         // Show success/error toasts from OAuth callback redirect
@@ -130,6 +139,21 @@ export default function SettingsPage() {
     setSaving(false);
     if (res.ok) toast.success("AI settings saved");
     else toast.error("Failed to save settings");
+  }
+
+  async function saveRoutineSettings() {
+    setSavingRoutine(true);
+    const res = await fetch("/api/user/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claudeCodeRoutineId: routineId || null,
+        claudeCodeRoutineToken: routineToken || null,
+      }),
+    });
+    setSavingRoutine(false);
+    if (res.ok) toast.success("Routine settings saved");
+    else toast.error("Failed to save routine settings");
   }
 
   async function saveProfileSettings() {
@@ -337,6 +361,94 @@ export default function SettingsPage() {
                 Save
               </Button>
             </div>
+          </Section>
+          <Section
+            title="Claude Code Routines"
+            description="Delegate tasks directly to a Claude Code Routine — it runs in Anthropic's cloud and can use your MCP connection to read and update tasks automatically."
+          >
+            <div className="space-y-3">
+              <FieldRow
+                label="Routine ID"
+                hint={
+                  <>
+                    From your Claude Code Routine&apos;s API trigger settings.{" "}
+                    <a href="https://claude.ai/claude-code/routines" target="_blank" rel="noopener noreferrer" className="text-primary underline decoration-primary/40 hover:decoration-primary inline-flex items-center gap-0.5">
+                      Open Routines <ExternalLink className="h-2.5 w-2.5" />
+                    </a>
+                  </>
+                }
+              >
+                <Input
+                  placeholder="routine_01HJKLMN…"
+                  value={routineId}
+                  onChange={(e) => setRoutineId(e.target.value)}
+                  className="bg-muted/40 border-border/60 h-9 font-mono text-xs focus-visible:ring-0 focus-visible:border-primary/60"
+                />
+              </FieldRow>
+
+              <FieldRow
+                label="Routine Token"
+                hint="Bearer token from the routine's API trigger page. Stored encrypted."
+              >
+                <div className="relative">
+                  <Input
+                    type={showRoutineToken ? "text" : "password"}
+                    placeholder="sk-ant-oat01-…"
+                    value={routineToken}
+                    onChange={(e) => setRoutineToken(e.target.value)}
+                    className="bg-muted/40 border-border/60 h-9 font-mono text-xs pr-10 focus-visible:ring-0 focus-visible:border-primary/60"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRoutineToken((s) => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showRoutineToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              </FieldRow>
+
+              <FieldRow label="Suggested routine prompt" hint="Paste this as your routine's saved prompt in Claude Code.">
+                <div className="relative group">
+                  <pre className="bg-muted/40 border border-border/60 rounded-md p-3 text-[11px] font-mono leading-relaxed overflow-x-auto whitespace-pre-wrap text-muted-foreground">
+{`You are an AI agent connected to my task management system via the TaskFlow MCP server.
+
+When triggered, you will receive a JSON object with: taskId, title, priority, description, notes, and mcpUrl.
+
+Steps:
+1. Parse the task data from the input
+2. Call get_task with the taskId to get the latest details
+3. Work on the task thoroughly based on its title, description, and notes
+4. Use update_task to write progress and results back to the task notes (Markdown)
+5. Call complete_task when finished
+
+Be thorough. Write real, useful output — not a summary of what you would do.`}
+                  </pre>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`You are an AI agent connected to my task management system via the TaskFlow MCP server.\n\nWhen triggered, you will receive a JSON object with: taskId, title, priority, description, notes, and mcpUrl.\n\nSteps:\n1. Parse the task data from the input\n2. Call get_task with the taskId to get the latest details\n3. Work on the task thoroughly based on its title, description, and notes\n4. Use update_task to write progress and results back to the task notes (Markdown)\n5. Call complete_task when finished\n\nBe thorough. Write real, useful output — not a summary of what you would do.`);
+                      toast.success("Prompt copied");
+                    }}
+                    title="Copy prompt"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
+              </FieldRow>
+            </div>
+
+            <Button
+              size="sm"
+              className="h-8 text-xs"
+              onClick={saveRoutineSettings}
+              disabled={savingRoutine}
+            >
+              {savingRoutine && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Save
+            </Button>
           </Section>
         </TabsContent>
 

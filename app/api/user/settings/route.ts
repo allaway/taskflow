@@ -22,11 +22,14 @@ export async function GET() {
       labelPalette: true,
       googleAccessToken: true,
       googleEmail: true,
+      claudeCodeRoutineId: true,
+      claudeCodeRoutineToken: true,
     },
   });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const decryptedApiKey = decryptNullable(user.aiApiKey);
+  const decryptedRoutineToken = decryptNullable(user.claudeCodeRoutineToken);
 
   return NextResponse.json({
     ...user,
@@ -34,6 +37,8 @@ export async function GET() {
     googleAccessToken: undefined, // never expose
     googleCalendarConnected: !!user.googleAccessToken,
     labelPalette: user.labelPalette ? JSON.parse(user.labelPalette) : [],
+    claudeCodeRoutineToken: decryptedRoutineToken ? maskSecret(decryptedRoutineToken) : null,
+    hasClaudeCodeRoutine: !!(user.claudeCodeRoutineId && user.claudeCodeRoutineToken),
   });
 }
 
@@ -64,7 +69,7 @@ export async function PATCH(req: NextRequest) {
   if (parsed.data.aiApiKey !== undefined && parsed.data.aiApiKey) {
     const existing = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { aiApiKey: true },
+      select: { aiApiKey: true, claudeCodeRoutineToken: true },
     });
     const isMasked = parsed.data.aiApiKey.includes("...");
     if (!isMasked) {
@@ -72,12 +77,46 @@ export async function PATCH(req: NextRequest) {
     } else {
       updates.aiApiKey = existing?.aiApiKey ?? null;
     }
+
+    if (parsed.data.claudeCodeRoutineToken !== undefined) {
+      if (parsed.data.claudeCodeRoutineToken === null) {
+        updates.claudeCodeRoutineToken = null;
+      } else {
+        const isMaskedToken = parsed.data.claudeCodeRoutineToken.includes("...");
+        if (!isMaskedToken) {
+          updates.claudeCodeRoutineToken = encryptNullable(parsed.data.claudeCodeRoutineToken);
+        } else {
+          updates.claudeCodeRoutineToken = existing?.claudeCodeRoutineToken ?? null;
+        }
+      }
+    }
+  }
+
+  if (parsed.data.claudeCodeRoutineToken !== undefined && parsed.data.aiApiKey === undefined) {
+    const existing = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { claudeCodeRoutineToken: true },
+    });
+    if (parsed.data.claudeCodeRoutineToken === null) {
+      updates.claudeCodeRoutineToken = null;
+    } else {
+      const isMaskedToken = parsed.data.claudeCodeRoutineToken.includes("...");
+      if (!isMaskedToken) {
+        updates.claudeCodeRoutineToken = encryptNullable(parsed.data.claudeCodeRoutineToken);
+      } else {
+        updates.claudeCodeRoutineToken = existing?.claudeCodeRoutineToken ?? null;
+      }
+    }
+  }
+
+  if (parsed.data.claudeCodeRoutineId !== undefined) {
+    updates.claudeCodeRoutineId = parsed.data.claudeCodeRoutineId || null;
   }
 
   const user = await prisma.user.update({
     where: { id: session.user.id },
     data: updates,
-    select: { id: true, name: true, email: true, aiProvider: true, aiModel: true, aiSchedulingModel: true, dailyBudgetHours: true, labelPalette: true },
+    select: { id: true, name: true, email: true, aiProvider: true, aiModel: true, aiSchedulingModel: true, dailyBudgetHours: true, labelPalette: true, claudeCodeRoutineId: true },
   });
 
   return NextResponse.json({

@@ -11,6 +11,7 @@ import type { Task } from "@prisma/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
+import { toast } from "sonner";
 import { SendToClaudeModal } from "./SendToClaudeModal";
 import { AgentRunModal } from "./AgentRunModal";
 
@@ -238,6 +239,28 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
 
   async function handleDelegateToAgent() {
     setAgentQueuing(true);
+
+    // Try Claude Code Routine first
+    try {
+      const res = await fetch(`/api/tasks/${task!.id}/delegate-routine`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json() as { sessionUrl: string };
+        setAgentQueuing(false);
+        window.open(data.sessionUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+      // 422 = no routine configured → fall through to server-side agent
+      if (res.status !== 422) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" })) as { error: string };
+        toast.error(err.error ?? "Failed to delegate task");
+        setAgentQueuing(false);
+        return;
+      }
+    } catch {
+      // network error → fall through
+    }
+
+    // Fall back to server-side agentic loop
     await onUpdate(task!.id, { agentQueued: true } as Partial<Task>);
     setAgentQueuing(false);
     setAgentRunOpen(true);
