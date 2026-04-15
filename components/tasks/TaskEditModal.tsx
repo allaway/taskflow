@@ -12,6 +12,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import { SendToClaudeModal } from "./SendToClaudeModal";
+import { AgentRunModal } from "./AgentRunModal";
 
 interface LabelEntry { name: string; color: string; }
 
@@ -144,6 +145,7 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
   const [labelPalette, setLabelPalette] = useState<LabelEntry[]>([]);
   const [saving, setSaving] = useState(false);
   const [sendToClaudeOpen, setSendToClaudeOpen] = useState(false);
+  const [agentRunOpen, setAgentRunOpen] = useState(false);
   const [agentQueuing, setAgentQueuing] = useState(false);
 
   useEffect(() => {
@@ -234,11 +236,11 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
     onOpenChange(false);
   }
 
-  async function handleSendToAgent() {
+  async function handleDelegateToAgent() {
     setAgentQueuing(true);
     await onUpdate(task!.id, { agentQueued: true } as Partial<Task>);
     setAgentQueuing(false);
-    setSendToClaudeOpen(true);
+    setAgentRunOpen(true);
   }
 
   return (
@@ -448,12 +450,12 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
               variant="ghost"
               size="sm"
               className="text-muted-foreground hover:text-foreground"
-              onClick={handleSendToAgent}
+              onClick={handleDelegateToAgent}
               disabled={agentQueuing}
-              title="Send to Claude Code or Claude.ai"
+              title="Delegate this task to an AI agent"
             >
               <Bot className="h-3.5 w-3.5 mr-1.5" />
-              {agentQueuing ? "Queuing…" : "Send to Claude"}
+              {agentQueuing ? "Starting…" : "Delegate to AI"}
             </Button>
           </div>
           <div className="flex gap-2">
@@ -468,6 +470,14 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
       </DialogContent>
     </Dialog>
 
+    {task && (
+      <AgentRunModal
+        task={task}
+        open={agentRunOpen}
+        onOpenChange={setAgentRunOpen}
+        onDone={() => { /* task modal will refresh on next open */ }}
+      />
+    )}
     {task && (
       <SendToClaudeModal
         task={task}
