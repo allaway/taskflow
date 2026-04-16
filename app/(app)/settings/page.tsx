@@ -371,7 +371,7 @@ export default function SettingsPage() {
                 label="Routine ID"
                 hint={
                   <>
-                    From your Claude Code Routine&apos;s API trigger settings.{" "}
+                    The trigger ID (e.g. <code className="font-mono text-[11px]">trig_01…</code>) from your routine&apos;s API trigger tab.{" "}
                     <a href="https://claude.ai/code/routines" target="_blank" rel="noopener noreferrer" className="text-primary underline decoration-primary/40 hover:decoration-primary inline-flex items-center gap-0.5">
                       Open Routines <ExternalLink className="h-2.5 w-2.5" />
                     </a>
@@ -379,7 +379,7 @@ export default function SettingsPage() {
                 }
               >
                 <Input
-                  placeholder="routine_01HJKLMN…"
+                  placeholder="trig_01…"
                   value={routineId}
                   onChange={(e) => setRoutineId(e.target.value)}
                   className="bg-muted/40 border-border/60 h-9 font-mono text-xs focus-visible:ring-0 focus-visible:border-primary/60"
