@@ -185,7 +185,15 @@ async function callTool(
     if (args.description !== undefined) data.description = args.description ? String(args.description) : null;
     if (args.notes !== undefined) data.notes = args.notes ? String(args.notes) : null;
     if (args.priority !== undefined) data.priority = args.priority;
-    if (args.status !== undefined) data.status = args.status;
+    if (args.status !== undefined) {
+      data.status = args.status;
+      // Mirror the completedAt logic from the REST PATCH endpoint
+      if (args.status === "COMPLETED" && existing.status !== "COMPLETED") {
+        data.completedAt = new Date();
+      } else if (args.status !== "COMPLETED" && existing.status === "COMPLETED") {
+        data.completedAt = null;
+      }
+    }
     if (args.startTime !== undefined) data.startTime = args.startTime ? String(args.startTime) : null;
     if (args.duration !== undefined) data.duration = args.duration ? Number(args.duration) : null;
     if (args.agentQueued !== undefined) data.agentQueued = Boolean(args.agentQueued);
@@ -200,7 +208,7 @@ async function callTool(
     if (!existing) throw new Error("Task not found");
     return prisma.task.update({
       where: { id: String(args.id) },
-      data: { status: "COMPLETED", completedAt: new Date() },
+      data: { status: "COMPLETED", completedAt: new Date(), agentQueued: false },
     });
   }
 

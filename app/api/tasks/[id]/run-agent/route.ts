@@ -107,10 +107,11 @@ export async function POST(
     where: { id: session.user.id },
     select: { aiProvider: true, aiApiKey: true, aiModel: true, aiSchedulingModel: true },
   });
+  if (!user) return new Response("User not found", { status: 404 });
 
   let config;
   try {
-    config = resolveAiConfig(user!);
+    config = resolveAiConfig(user);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "AI not configured";
     return new Response(msg, { status: 422 });

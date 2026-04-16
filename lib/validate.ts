@@ -26,7 +26,7 @@ export const CreateTaskSchema = z.object({
   scheduledDate: futureDatetime.optional(),
   startTime: z
     .string()
-    .regex(/^\d{2}:\d{2}$/, "startTime must be HH:MM")
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "startTime must be HH:MM")
     .optional(),
   duration: z.number().int().min(5).max(480).optional(),
   recurringRule: z.string().max(100).optional(),
@@ -41,7 +41,7 @@ export const UpdateTaskSchema = z.object({
   scheduledDate: futureDatetime.optional().nullable(),
   startTime: z
     .string()
-    .regex(/^\d{2}:\d{2}$/)
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
     .optional()
     .nullable(),
   duration: z.number().int().min(5).max(480).optional().nullable(),
@@ -59,7 +59,7 @@ export const WebhookTaskSchema = z.object({
   scheduledDate: z.string().datetime().optional(),
   startTime: z
     .string()
-    .regex(/^\d{2}:\d{2}$/)
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
     .optional(),
   duration: z.number().int().min(5).max(480).optional(),
 });
@@ -68,12 +68,12 @@ export const AiScheduleSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
   workStartTime: z
     .string()
-    .regex(/^\d{2}:\d{2}$/)
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
     .optional()
     .default("09:00"),
   workEndTime: z
     .string()
-    .regex(/^\d{2}:\d{2}$/)
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
     .optional()
     .default("18:00"),
   timezone: z.string().optional().default("UTC"),
