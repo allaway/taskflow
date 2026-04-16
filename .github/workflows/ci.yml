@@ -108,6 +108,11 @@ jobs:
       - name: Build app
         run: npm run build
 
+      - name: Copy static assets for standalone server
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+
       - name: Run E2E tests
         run: npm run test:e2e
 
