@@ -34,25 +34,14 @@ test.describe("Settings", () => {
     expect(savedValue).not.toContain("testkey123456789");
   });
 
-  test("saves N8N webhook secret", async ({ page }) => {
+  test("saves profile name", async ({ page }) => {
     await page.goto("/settings");
-    await page.getByRole("tab", { name: /N8N/i }).click();
+    await page.getByRole("tab", { name: /Profile/i }).click();
 
-    await page.getByTestId("n8n-secret-input").fill("my-webhook-secret-abc");
-    await page.getByTestId("save-n8n-settings-btn").click();
+    const input = page.getByTestId("profile-name-input");
+    await input.fill("Updated Name");
+    await page.getByTestId("save-profile-btn").click();
 
-    await expect(page.getByText(/N8N settings saved/i)).toBeVisible({ timeout: 5000 });
-  });
-
-  test("generates random webhook secret", async ({ page }) => {
-    await page.goto("/settings");
-    await page.getByRole("tab", { name: /N8N/i }).click();
-
-    const before = await page.getByTestId("n8n-secret-input").inputValue();
-    await page.locator('[title="Generate random secret"]').click();
-    const after = await page.getByTestId("n8n-secret-input").inputValue();
-
-    expect(after).not.toBe(before);
-    expect(after.length).toBeGreaterThan(20);
+    await expect(page.getByText(/Profile saved/i)).toBeVisible({ timeout: 5000 });
   });
 });

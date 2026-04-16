@@ -37,6 +37,6 @@ test.describe("Task management", () => {
 
     const card = page.getByTestId("task-card").filter({ hasText: "Task to complete" }).first();
     await card.getByTestId("task-complete-btn").click();
-    await expect(card.locator("p.line-through")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId("task-card").filter({ hasText: "Task to complete" })).toHaveCount(0, { timeout: 5000 });
   });
 });

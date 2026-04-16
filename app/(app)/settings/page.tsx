@@ -670,6 +670,7 @@ Be thorough. Write real, useful output — not a summary of what you would do.`}
               className="h-8 text-xs"
               onClick={saveProfileSettings}
               disabled={saving}
+              data-testid="save-profile-btn"
             >
               {saving && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
               Save
