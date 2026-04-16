@@ -26,12 +26,15 @@ export default function ReviewPage() {
     let active = true;
     setLoading(true);
     const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-    Promise.all(
-      days.map((day) =>
+    const weekEndDate = addDays(weekStart, 7);
+    Promise.all([
+      ...days.map((day) =>
         fetch(`/api/tasks?date=${format(day, "yyyy-MM-dd")}`)
           .then((r) => r.ok ? r.json() : [])
-      )
-    ).then((results: Task[][]) => {
+      ),
+      fetch(`/api/tasks?completedFrom=${format(weekStart, "yyyy-MM-dd")}&completedTo=${format(weekEndDate, "yyyy-MM-dd")}`)
+        .then((r) => r.ok ? r.json() : []),
+    ]).then((results: Task[][]) => {
       if (!active) return;
       // Deduplicate by id
       const seen = new Set<string>();

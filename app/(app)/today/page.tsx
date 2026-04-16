@@ -597,7 +597,7 @@ export default function TodayPage() {
 
         {/* ── Inbox panel ──────────────────────────────────────────────────── */}
         <DroppableInbox
-          className="border-l border-border/60 flex flex-col shrink-0"
+          className="border-l border-border/60 flex flex-col shrink-0 overflow-hidden"
           style={{ width: "272px" }}
         >
           <div className="h-14 flex items-center justify-between px-4 border-b border-border/60 shrink-0">
