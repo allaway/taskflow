@@ -372,7 +372,7 @@ export default function SettingsPage() {
                 hint={
                   <>
                     From your Claude Code Routine&apos;s API trigger settings.{" "}
-                    <a href="https://claude.ai/claude-code/routines" target="_blank" rel="noopener noreferrer" className="text-primary underline decoration-primary/40 hover:decoration-primary inline-flex items-center gap-0.5">
+                    <a href="https://claude.ai/code/routines" target="_blank" rel="noopener noreferrer" className="text-primary underline decoration-primary/40 hover:decoration-primary inline-flex items-center gap-0.5">
                       Open Routines <ExternalLink className="h-2.5 w-2.5" />
                     </a>
                   </>
