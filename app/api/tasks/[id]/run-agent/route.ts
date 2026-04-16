@@ -205,7 +205,7 @@ Write your results directly in the notes using clear Markdown formatting.`;
             let result = "OK";
 
             if (block.name === "write_notes") {
-              const content = String(input.content ?? "");
+              const content = String(input.content ?? "").slice(0, 10000);
               const replace = Boolean(input.replace);
               if (replace) {
                 currentNotes = content;
@@ -244,12 +244,12 @@ Write your results directly in the notes using clear Markdown formatting.`;
             }
 
             if (block.name === "create_subtask") {
-              const subtaskTitle = String(input.title ?? "Subtask");
-              const userId = session!.user!.id!;
+              const subtaskTitle = String(input.title ?? "Subtask").slice(0, 500);
+              const userId = session.user.id;
               await prisma.task.create({
                 data: {
                   title: subtaskTitle,
-                  description: input.description ? String(input.description) : null,
+                  description: input.description ? String(input.description).slice(0, 5000) : null,
                   priority: (input.priority as "LOW" | "MEDIUM" | "HIGH") ?? "MEDIUM",
                   status: "INBOX",
                   source: "API",

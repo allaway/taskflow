@@ -58,7 +58,7 @@ export async function POST(
     priority: task.priority,
     description: task.description ?? null,
     notes: task.notes ?? null,
-    mcpUrl: `${req.headers.get("x-forwarded-proto") ?? "https"}://${req.headers.get("x-forwarded-host") ?? req.headers.get("host")}/api/mcp`,
+    mcpUrl: `${process.env.NEXTAUTH_URL ?? "https://taskflow-production-585d.up.railway.app"}/api/mcp`,
   });
 
   const routineUrl = `${ROUTINE_FIRE_URL}/${user.claudeCodeRoutineId}/fire`;
@@ -81,11 +81,13 @@ export async function POST(
   }
 
   if (!routineRes.ok) {
-    const body = await routineRes.text().catch(() => "");
-    return NextResponse.json(
-      { error: `Routine fire failed (${routineRes.status}): ${body}` },
-      { status: routineRes.status }
-    );
+    // Do not forward the raw upstream body — it may contain internal API details
+    const status = routineRes.status;
+    const msg = status === 401 ? "Invalid routine token" :
+                status === 404 ? "Routine not found" :
+                status === 422 ? "Routine rejected the request" :
+                "Failed to fire routine";
+    return NextResponse.json({ error: msg }, { status });
   }
 
   const data = await routineRes.json() as {

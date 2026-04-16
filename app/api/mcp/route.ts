@@ -181,9 +181,9 @@ async function callTool(
     assertNotPast(args.scheduledDate);
     // Explicit allowlist — never let callers overwrite userId, source, completedAt, etc.
     const data: Record<string, unknown> = {};
-    if (args.title !== undefined) data.title = String(args.title);
-    if (args.description !== undefined) data.description = args.description ? String(args.description) : null;
-    if (args.notes !== undefined) data.notes = args.notes ? String(args.notes) : null;
+    if (args.title !== undefined) data.title = String(args.title).slice(0, 500);
+    if (args.description !== undefined) data.description = args.description ? String(args.description).slice(0, 5000) : null;
+    if (args.notes !== undefined) data.notes = args.notes ? String(args.notes).slice(0, 10000) : null;
     if (args.priority !== undefined) data.priority = args.priority;
     if (args.status !== undefined) {
       data.status = args.status;
