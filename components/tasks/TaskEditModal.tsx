@@ -246,7 +246,16 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
       if (res.ok) {
         const data = await res.json() as { sessionUrl: string };
         setAgentQueuing(false);
-        window.open(data.sessionUrl, "_blank", "noopener,noreferrer");
+        onOpenChange(false);
+        const opened = window.open(data.sessionUrl, "_blank", "noopener,noreferrer");
+        if (!opened) {
+          toast.info("Popup blocked — open your Claude session manually", {
+            action: { label: "Open", onClick: () => window.open(data.sessionUrl, "_blank") },
+            duration: 10000,
+          });
+        } else {
+          toast.success("Agent session opened in new tab");
+        }
         return;
       }
       // 422 = no routine configured → fall through to server-side agent
@@ -263,7 +272,9 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
     // Fall back to server-side agentic loop
     await onUpdate(task!.id, { agentQueued: true } as Partial<Task>);
     setAgentQueuing(false);
-    setAgentRunOpen(true);
+    onOpenChange(false);    // close task edit modal first
+    // Wait for the close animation (100ms) before opening agent modal
+    setTimeout(() => setAgentRunOpen(true), 150);
   }
 
   return (
@@ -498,7 +509,7 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
         task={task}
         open={agentRunOpen}
         onOpenChange={setAgentRunOpen}
-        onDone={() => { /* task modal will refresh on next open */ }}
+        onDone={() => onUpdate(task.id, {})}
       />
     )}
     {task && (
