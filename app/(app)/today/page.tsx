@@ -279,6 +279,8 @@ export default function TodayPage() {
     return () => { active = false; };
   }, [dateStr, refresh]);
 
+  function fetchTasks() { setRefresh((r) => r + 1); }
+
   useEffect(() => {
     function onVisible() {
       if (document.visibilityState === "visible") fetchTasks();
@@ -299,8 +301,6 @@ export default function TodayPage() {
     const id = setInterval(() => setNowPx(nowTopPx()), 60_000);
     return () => clearInterval(id);
   }, [todayView]);
-
-  function fetchTasks() { setRefresh((r) => r + 1); }
 
   async function updateTask(id: string, updates: Partial<Task>) {
     const res = await fetch(`/api/tasks/${id}`, {
