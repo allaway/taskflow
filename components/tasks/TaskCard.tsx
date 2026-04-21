@@ -7,6 +7,24 @@ import { cn } from "@/lib/utils";
 import type { Task } from "@prisma/client";
 import { GeneratePromptModal } from "@/components/ai/GeneratePromptModal";
 import { TaskEditModal } from "@/components/tasks/TaskEditModal";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import type { Components } from "react-markdown";
+
+const cardMdComponents: Components = {
+  p: ({ children }) => <span className="block">{children}</span>,
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline" onClick={(e) => e.stopPropagation()}>
+      {children}
+    </a>
+  ),
+  code: ({ children }) => <code className="bg-muted/80 rounded px-0.5 text-[11px] font-mono">{children}</code>,
+  ul: ({ children }) => <span className="block">{children}</span>,
+  ol: ({ children }) => <span className="block">{children}</span>,
+  li: ({ children }) => <span className="block pl-3 before:content-['·'] before:mr-1.5 before:opacity-50">{children}</span>,
+};
 
 interface TaskCardProps {
   task: Task;
@@ -57,7 +75,7 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
     <>
       <div
         className={cn(
-          "group relative flex items-start gap-3 px-3.5 py-3 rounded-xl",
+          "group relative flex items-start gap-2.5 px-3 py-2 rounded-xl",
           "bg-card border border-border/60",
           "shadow-[0_1px_3px_0_rgba(0,0,0,0.06),0_1px_2px_-1px_rgba(0,0,0,0.06)]",
           "transition-all duration-150",
@@ -96,15 +114,17 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
             {task.title}
           </p>
 
-          {task.description && !done && (
-            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
-              {task.description}
-            </p>
+          {task.description && (
+            <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={cardMdComponents}>
+                {task.description}
+              </ReactMarkdown>
+            </div>
           )}
 
           {/* Meta row */}
           {(labels.length > 0 || src || (showTime && task.startTime)) && (
-            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               {labels.map((label: string) => (
                 <span key={label} className="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/8 text-primary font-medium ring-1 ring-primary/15">
                   {label}

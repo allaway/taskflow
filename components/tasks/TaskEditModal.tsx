@@ -280,7 +280,7 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/40 shrink-0">
           <div className="flex items-start gap-3 pr-4">

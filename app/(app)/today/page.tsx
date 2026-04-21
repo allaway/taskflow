@@ -230,7 +230,9 @@ export default function TodayPage() {
   const [dailyBudgetHours, setDailyBudgetHours] = useState(8);
   const [refresh, setRefresh] = useState(0);
   const [completedToday, setCompletedToday] = useState<Task[]>([]);
+  const [completingIds, setCompletingIds] = useState<Set<string>>(new Set());
   const timelineRef = useRef<HTMLDivElement>(null);
+  const loadedDateRef = useRef<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const dateStr = format(date, "yyyy-MM-dd");
@@ -252,7 +254,7 @@ export default function TodayPage() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    if (dateStr !== loadedDateRef.current) setLoading(true);
     const todayStr = format(new Date(), "yyyy-MM-dd");
     Promise.all([
       fetch(`/api/tasks?date=${dateStr}`),
@@ -263,6 +265,7 @@ export default function TodayPage() {
       if (dayRes.ok) setTasks(await dayRes.json());
       if (inboxRes.ok) setInboxTasks(await inboxRes.json());
       if (completedRes.ok) setCompletedToday(await completedRes.json());
+      loadedDateRef.current = dateStr;
       setLoading(false);
     }).catch(() => {
       if (!active) return;
@@ -275,6 +278,14 @@ export default function TodayPage() {
     }).catch(() => {/* silent */});
     return () => { active = false; };
   }, [dateStr, refresh]);
+
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === "visible") fetchTasks();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
 
   useEffect(() => {
     fetch("/api/user/settings").then(r => r.ok ? r.json() : null).then(d => {
@@ -305,6 +316,33 @@ export default function TodayPage() {
     const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
     if (res.ok) { setTasks((prev) => prev.filter((t) => t.id !== id)); toast.success("Task deleted"); }
     else toast.error("Failed to delete task");
+  }
+
+  async function handleInboxPanelUpdate(id: string, updates: Partial<Task>) {
+    if (updates.status !== "COMPLETED") {
+      return updateTask(id, updates);
+    }
+    setCompletingIds((prev) => new Set([...prev, id]));
+    try {
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        setCompletingIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+        toast.error("Failed to update task");
+        return;
+      }
+      setTimeout(() => {
+        setInboxTasks((prev) => prev.filter((t) => t.id !== id));
+        setTasks((prev) => prev.filter((t) => t.id !== id));
+        setCompletingIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+      }, 260);
+    } catch {
+      setCompletingIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+      toast.error("Failed to update task");
+    }
   }
 
   async function addTask(data: Partial<Task>) {
@@ -624,22 +662,23 @@ export default function TodayPage() {
               {addingTask && (
                 <TaskForm onSubmit={addTask} onCancel={() => setAddingTask(false)} defaultDate={dateStr} />
               )}
-              {/* Planned-but-untimed tasks for today */}
+              {/* Planned-but-untimed tasks for the selected day */}
               {!loading && unscheduledDayTasks.length > 0 && (
                 <>
                   <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wide px-1 pt-1">
-                    Today — drag to schedule
+                    {todayView ? "Today" : format(date, "EEE, MMM d")} — drag to schedule
                   </p>
                   {unscheduledDayTasks.map((task) => (
-                    <DraggableTask key={task.id} id={task.id}>
-                      <TaskCard task={task} onUpdate={updateTask} onDelete={deleteTask} />
-                    </DraggableTask>
+                    <div
+                      key={task.id}
+                      className="overflow-hidden transition-all duration-[260ms] ease-out"
+                      style={completingIds.has(task.id) ? { maxHeight: 0, opacity: 0, marginTop: 0 } : { maxHeight: "200px", opacity: 1 }}
+                    >
+                      <DraggableTask id={task.id}>
+                        <TaskCard task={task} onUpdate={handleInboxPanelUpdate} onDelete={deleteTask} />
+                      </DraggableTask>
+                    </div>
                   ))}
-                  {inboxTasks.length > 0 && (
-                    <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wide px-1 pt-2">
-                      Inbox
-                    </p>
-                  )}
                 </>
               )}
               {loading ? (
@@ -649,11 +688,24 @@ export default function TodayPage() {
                   <p className="text-xs text-muted-foreground">Inbox is clear</p>
                 </div>
               ) : (
-                inboxTasks.map((task) => (
-                  <DraggableTask key={task.id} id={task.id}>
-                    <TaskCard task={task} onUpdate={updateTask} onDelete={deleteTask} />
-                  </DraggableTask>
-                ))
+                <>
+                  {unscheduledDayTasks.length > 0 && (
+                    <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wide px-1 pt-2">
+                      Inbox
+                    </p>
+                  )}
+                  {inboxTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className="overflow-hidden transition-all duration-[260ms] ease-out"
+                      style={completingIds.has(task.id) ? { maxHeight: 0, opacity: 0, marginTop: 0 } : { maxHeight: "200px", opacity: 1 }}
+                    >
+                      <DraggableTask id={task.id}>
+                        <TaskCard task={task} onUpdate={handleInboxPanelUpdate} onDelete={deleteTask} />
+                      </DraggableTask>
+                    </div>
+                  ))}
+                </>
               )}
             </div>
           </ScrollArea>

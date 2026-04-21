@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, CheckCircle2, Circle, MoveRight, Inbox, BarC
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Task } from "@prisma/client";
+import { TaskEditModal } from "@/components/tasks/TaskEditModal";
 
 const priorityColor: Record<string, string> = {
   HIGH:   "bg-rose-500",
@@ -19,6 +20,8 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [triaging, setTriaging] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
 
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
 
@@ -100,6 +103,30 @@ export default function ReviewPage() {
     setRefresh((r) => r + 1);
   }
 
+  async function updateTask(id: string, updates: Partial<Task>) {
+    const res = await fetch(`/api/tasks/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    if (res.ok) setRefresh((r) => r + 1);
+    else toast.error("Failed to update task");
+  }
+
+  async function deleteTask(id: string) {
+    const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+      setTaskModalOpen(false);
+      toast.success("Task deleted");
+    } else toast.error("Failed to delete task");
+  }
+
+  function openTask(task: Task) {
+    setSelectedTask(task);
+    setTaskModalOpen(true);
+  }
+
   const thisWeek = format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd") === format(weekStart, "yyyy-MM-dd");
   const completionPct = tasks.length > 0 ? Math.round((completed.length / tasks.length) * 100) : 0;
 
@@ -164,7 +191,11 @@ export default function ReviewPage() {
                 </p>
                 <div className="space-y-1">
                   {completed.map((task) => (
-                    <div key={task.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-muted/20 border border-border/30">
+                    <button
+                      key={task.id}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-muted/20 border border-border/30 hover:bg-muted/40 hover:border-border/50 transition-colors text-left"
+                      onClick={() => openTask(task)}
+                    >
                       <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                       <div className={cn("h-1 w-1 rounded-full shrink-0", priorityColor[task.priority])} />
                       <span className="text-sm text-muted-foreground line-through truncate">{task.title}</span>
@@ -173,7 +204,7 @@ export default function ReviewPage() {
                           {format(new Date(task.scheduledDate), "EEE")}
                         </span>
                       )}
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -210,7 +241,11 @@ export default function ReviewPage() {
                 </div>
                 <div className="space-y-1">
                   {incomplete.map((task) => (
-                    <div key={task.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-muted/30 border border-border/40">
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-muted/30 border border-border/40 hover:bg-muted/50 hover:border-border/60 transition-colors cursor-pointer"
+                      onClick={() => openTask(task)}
+                    >
                       <Circle className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
                       <div className={cn("h-1 w-1 rounded-full shrink-0", priorityColor[task.priority])} />
                       <span className="text-sm truncate">{task.title}</span>
@@ -219,7 +254,7 @@ export default function ReviewPage() {
                           {format(new Date(task.scheduledDate), "EEE")}
                         </span>
                       )}
-                      <div className="ml-auto flex gap-1 shrink-0">
+                      <div className="ml-auto flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -253,6 +288,13 @@ export default function ReviewPage() {
           </>
         )}
       </div>
+      <TaskEditModal
+        task={selectedTask}
+        open={taskModalOpen}
+        onOpenChange={setTaskModalOpen}
+        onUpdate={updateTask}
+        onDelete={deleteTask}
+      />
     </div>
   );
 }

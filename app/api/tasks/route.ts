@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   const completedDate = searchParams.get("completedDate");
   const completedFrom = searchParams.get("completedFrom");
   const completedTo = searchParams.get("completedTo");
+  const q = searchParams.get("q");
 
   const where: Record<string, unknown> = { userId: session.user.id };
   if (status) where.status = status;
@@ -34,6 +35,13 @@ export async function GET(req: NextRequest) {
     if (completedFrom) range.gte = new Date(completedFrom + "T00:00:00.000Z");
     if (completedTo) range.lt = new Date(completedTo + "T00:00:00.000Z");
     where.completedAt = range;
+  }
+  if (q) {
+    where.OR = [
+      { title: { contains: q, mode: "insensitive" } },
+      { description: { contains: q, mode: "insensitive" } },
+      { notes: { contains: q, mode: "insensitive" } },
+    ];
   }
 
   const tasks = await prisma.task.findMany({
