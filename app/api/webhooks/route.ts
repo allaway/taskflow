@@ -38,6 +38,17 @@ export async function POST(req: NextRequest) {
 
   const { externalId, ...taskData } = parsed.data;
 
+  // If an externalId was provided and the task has already been moved out of
+  // INBOX (i.e. the user resolved it in TaskFlow), don't re-import it.
+  if (externalId) {
+    const existing = await prisma.task.findUnique({
+      where: { userId_externalId: { userId: apiToken.userId, externalId } },
+    });
+    if (existing && existing.status !== "INBOX") {
+      return NextResponse.json(existing, { status: 200 });
+    }
+  }
+
   const task = await prisma.task.upsert({
     where: {
       userId_externalId: {
