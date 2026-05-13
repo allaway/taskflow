@@ -55,10 +55,7 @@ export default function InboxPage() {
 
   const filtered = tasks
     .filter((t) => priorityFilter === "all" || t.priority === priorityFilter)
-    .sort((a, b) => {
-      const order: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-      return order[a.priority] - order[b.priority];
-    });
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const counts = {
     HIGH: tasks.filter((t) => t.priority === "HIGH").length,
