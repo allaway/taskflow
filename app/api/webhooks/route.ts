@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { hashToken } from "@/lib/tokens";
 import { WebhookTaskSchema } from "@/lib/validate";
 import { rateLimit, getClientIp } from "@/lib/rateLimit";
+import { parseLinkUrl } from "@/lib/integrations/links";
 
 export async function POST(req: NextRequest) {
   const limited = await rateLimit(getClientIp(req), "webhook");
@@ -17,10 +18,10 @@ export async function POST(req: NextRequest) {
 
   const apiToken = await prisma.apiToken.findUnique({
     where: { tokenHash },
-    select: { id: true, userId: true },
+    select: { id: true, userId: true, expiresAt: true },
   });
 
-  if (!apiToken) {
+  if (!apiToken || (apiToken.expiresAt && apiToken.expiresAt < new Date())) {
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { externalId, ...taskData } = parsed.data;
+  const { externalId, link, ...taskData } = parsed.data;
 
   const task = await prisma.task.upsert({
     where: {
@@ -60,6 +61,26 @@ export async function POST(req: NextRequest) {
       status: "INBOX",
     },
   });
+
+  // Optional issue link (e.g. the GitHub/Jira item that spawned this task) —
+  // enables resolution sync back to the tracker on completion.
+  if (link) {
+    const parsedLink = parseLinkUrl(link);
+    const existing = await prisma.taskLink.findFirst({
+      where: { taskId: task.id, url: parsedLink.url },
+    });
+    if (!existing) {
+      await prisma.taskLink.create({
+        data: {
+          taskId: task.id,
+          provider: parsedLink.provider,
+          externalKey: parsedLink.externalKey,
+          url: parsedLink.url,
+          syncOnComplete: parsedLink.provider !== "URL",
+        },
+      });
+    }
+  }
 
   return NextResponse.json(task, { status: 201 });
 }

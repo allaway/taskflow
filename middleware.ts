@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
 
 const { auth } = NextAuth(authConfig);
 
-const PUBLIC_PATHS = ["/login", "/register", "/api/auth", "/api/webhooks", "/api/mcp", "/.well-known", "/authorize", "/oauth"];
+const PUBLIC_PATHS = ["/login", "/register", "/api/auth", "/api/webhooks", "/api/mcp", "/api/health", "/.well-known", "/authorize", "/oauth"];
 
 export default auth((req: NextRequest & { auth: unknown }) => {
   const { pathname } = req.nextUrl;

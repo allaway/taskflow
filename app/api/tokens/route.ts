@@ -6,6 +6,7 @@ import { z } from "zod";
 
 const CreateTokenSchema = z.object({
   name: z.string().min(1).max(100),
+  expiresInDays: z.number().int().min(1).max(365).optional(),
 });
 
 export async function GET() {
@@ -14,7 +15,7 @@ export async function GET() {
 
   const tokens = await prisma.apiToken.findMany({
     where: { userId: session.user.id },
-    select: { id: true, name: true, tokenPrefix: true, createdAt: true, lastUsedAt: true },
+    select: { id: true, name: true, tokenPrefix: true, createdAt: true, lastUsedAt: true, expiresAt: true },
     orderBy: { createdAt: "desc" },
   });
 
@@ -37,8 +38,11 @@ export async function POST(req: NextRequest) {
       tokenHash,
       tokenPrefix,
       userId: session.user.id,
+      expiresAt: parsed.data.expiresInDays
+        ? new Date(Date.now() + parsed.data.expiresInDays * 24 * 60 * 60 * 1000)
+        : null,
     },
-    select: { id: true, name: true, tokenPrefix: true, createdAt: true },
+    select: { id: true, name: true, tokenPrefix: true, createdAt: true, expiresAt: true },
   });
 
   return NextResponse.json({ ...record, token }, { status: 201 });

@@ -9,6 +9,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { hashToken } from "@/lib/tokens";
 import { getOrigin } from "@/lib/request-origin";
+import {
+  createAgentSession,
+  addActivity,
+  submitResult,
+  requestInput,
+  failSession,
+} from "@/lib/agentSessions";
+import { syncLinksOnComplete } from "@/lib/integrations/resolve";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -19,9 +27,10 @@ async function getUserId(req: NextRequest): Promise<string | null> {
   const hash = hashToken(raw);
   const record = await prisma.apiToken.findUnique({
     where: { tokenHash: hash },
-    select: { userId: true },
+    select: { userId: true, expiresAt: true },
   });
   if (!record) return null;
+  if (record.expiresAt && record.expiresAt < new Date()) return null;
   prisma.apiToken
     .update({ where: { tokenHash: hash }, data: { lastUsedAt: new Date() } })
     .catch(() => {});
@@ -37,9 +46,10 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        status: { type: "string", enum: ["INBOX", "SCHEDULED", "COMPLETED", "CANCELLED"] },
+        status: { type: "string", enum: ["INBOX", "SCHEDULED", "NEEDS_REVIEW", "COMPLETED", "CANCELLED"] },
         date: { type: "string", description: "YYYY-MM-DD" },
         source: { type: "string", enum: ["MANUAL", "API", "RECURRING"] },
+        limit: { type: "number", description: "Max results (default 200, max 500)" },
       },
     },
   },
@@ -79,7 +89,7 @@ const TOOLS = [
         title: { type: "string" },
         description: { type: "string" },
         notes: { type: "string" },
-        status: { type: "string", enum: ["INBOX", "SCHEDULED", "COMPLETED", "CANCELLED"] },
+        status: { type: "string", enum: ["INBOX", "SCHEDULED", "NEEDS_REVIEW", "COMPLETED", "CANCELLED"] },
         priority: { type: "string", enum: ["LOW", "MEDIUM", "HIGH"] },
         scheduledDate: { type: "string" },
         startTime: { type: "string" },
@@ -114,11 +124,79 @@ const TOOLS = [
   },
   {
     name: "claim_agent_task",
-    description: "Claim a queued agent task so you can work on it. This dequeues the task so other agents won't also pick it up.",
+    description:
+      "Claim a queued agent task so you can work on it. This dequeues the task so other agents won't also pick it up, and starts an agent session. Use the returned sessionId with add_activity, request_input, and submit_result to report your progress.",
     inputSchema: {
       type: "object",
-      properties: { id: { type: "string", description: "Task ID to claim" } },
+      properties: {
+        id: { type: "string", description: "Task ID to claim" },
+        agentName: { type: "string", description: "Your display name, e.g. 'Claude Code'" },
+        sessionUrl: { type: "string", description: "Optional URL where the user can watch you work live" },
+      },
       required: ["id"],
+    },
+  },
+  {
+    name: "add_activity",
+    description:
+      "Report progress on an agent session. Use type 'THOUGHT' for reasoning/plans and 'ACTION' for things you did. The user sees these as a live activity thread on the task.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: { type: "string" },
+        type: { type: "string", enum: ["THOUGHT", "ACTION"] },
+        content: { type: "string" },
+        toolName: { type: "string", description: "Optional tool/command name for ACTION entries" },
+      },
+      required: ["sessionId", "type", "content"],
+    },
+  },
+  {
+    name: "request_input",
+    description:
+      "Ask the user a blocking question when you cannot proceed without their decision. The session pauses (AWAITING_INPUT) until they answer. Poll get_session to read the answer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: { type: "string" },
+        question: { type: "string" },
+      },
+      required: ["sessionId", "question"],
+    },
+  },
+  {
+    name: "get_session",
+    description:
+      "Get the current state of an agent session — status, the user's answer to a pending question, and review feedback if work was sent back.",
+    inputSchema: {
+      type: "object",
+      properties: { sessionId: { type: "string" } },
+      required: ["sessionId"],
+    },
+  },
+  {
+    name: "submit_result",
+    description:
+      "Submit your finished work for human review. The task moves to NEEDS_REVIEW — it is NOT completed until the user accepts. Always use this instead of complete_task when you are working a delegated agent task.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: { type: "string" },
+        summary: { type: "string", description: "What you did and where the output lives" },
+      },
+      required: ["sessionId", "summary"],
+    },
+  },
+  {
+    name: "report_error",
+    description: "Report that you cannot finish the agent session. Marks the session as ERROR.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: { type: "string" },
+        message: { type: "string" },
+      },
+      required: ["sessionId", "message"],
     },
   },
 ];
@@ -147,7 +225,12 @@ async function callTool(
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
       where.scheduledDate = { gte: dayStart, lt: dayEnd };
     }
-    return prisma.task.findMany({ where, orderBy: [{ priority: "desc" }, { createdAt: "asc" }] });
+    const limit = Math.min(Math.max(Number(args.limit) || 200, 1), 500);
+    return prisma.task.findMany({
+      where,
+      orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+      take: limit,
+    });
   }
 
   if (name === "get_task") {
@@ -189,6 +272,15 @@ async function callTool(
       data.status = args.status;
       // Mirror the completedAt logic from the REST PATCH endpoint
       if (args.status === "COMPLETED" && existing.status !== "COMPLETED") {
+        // Same review gate as complete_task
+        const liveSession = await prisma.agentSession.findFirst({
+          where: { taskId: existing.id, status: { in: ["PENDING", "ACTIVE", "AWAITING_INPUT", "NEEDS_REVIEW"] } },
+        });
+        if (liveSession) {
+          throw new Error(
+            `This task has an active agent session (${liveSession.id}). Use submit_result with that sessionId — agents may not complete delegated tasks directly.`
+          );
+        }
         data.completedAt = new Date();
       } else if (args.status !== "COMPLETED" && existing.status === "COMPLETED") {
         data.completedAt = null;
@@ -200,16 +292,33 @@ async function callTool(
     if ("scheduledDate" in args) {
       data.scheduledDate = args.scheduledDate ? new Date(String(args.scheduledDate)) : null;
     }
-    return prisma.task.update({ where: { id: String(args.id) }, data });
+    const updated = await prisma.task.update({ where: { id: String(args.id) }, data });
+    if (data.completedAt instanceof Date) {
+      const linkSync = await syncLinksOnComplete(existing.id, userId);
+      if (linkSync.length) return { ...updated, linkSync };
+    }
+    return updated;
   }
 
   if (name === "complete_task") {
     const existing = await prisma.task.findFirst({ where: { id: String(args.id), userId } });
     if (!existing) throw new Error("Task not found");
-    return prisma.task.update({
+    // Review gate: a task with a live agent session must go through
+    // submit_result + human review, never direct completion.
+    const liveSession = await prisma.agentSession.findFirst({
+      where: { taskId: existing.id, status: { in: ["PENDING", "ACTIVE", "AWAITING_INPUT", "NEEDS_REVIEW"] } },
+    });
+    if (liveSession) {
+      throw new Error(
+        `This task has an active agent session (${liveSession.id}). Use submit_result with that sessionId so the user can review the work — agents may not complete delegated tasks directly.`
+      );
+    }
+    const updated = await prisma.task.update({
       where: { id: String(args.id) },
       data: { status: "COMPLETED", completedAt: new Date(), agentQueued: false },
     });
+    const linkSync = await syncLinksOnComplete(existing.id, userId);
+    return linkSync.length ? { ...updated, linkSync } : updated;
   }
 
   if (name === "delete_task") {
@@ -230,10 +339,106 @@ async function callTool(
     const existing = await prisma.task.findFirst({ where: { id: String(args.id), userId } });
     if (!existing) throw new Error("Task not found");
     if (!existing.agentQueued) throw new Error("Task is not queued for an agent");
-    return prisma.task.update({
-      where: { id: String(args.id) },
-      data: { agentQueued: false },
+
+    // Reuse a PENDING session created at delegation time (e.g. by a Claude
+    // Code routine dispatch) rather than opening a duplicate.
+    const pending = await prisma.agentSession.findFirst({
+      where: { taskId: existing.id, status: "PENDING" },
+      orderBy: { startedAt: "desc" },
     });
+    const session = pending
+      ? await prisma.agentSession.update({
+          where: { id: pending.id },
+          data: {
+            status: "ACTIVE",
+            agentName: args.agentName ? String(args.agentName).slice(0, 200) : pending.agentName,
+            sessionUrl: args.sessionUrl ? String(args.sessionUrl).slice(0, 1000) : pending.sessionUrl,
+            lastActivityAt: new Date(),
+          },
+        })
+      : await createAgentSession({
+          taskId: existing.id,
+          userId,
+          agentType: "mcp",
+          agentName: args.agentName ? String(args.agentName).slice(0, 200) : "MCP agent",
+          sessionUrl: args.sessionUrl ? String(args.sessionUrl).slice(0, 1000) : undefined,
+          status: "ACTIVE",
+        });
+
+    const task = await prisma.task.update({
+      where: { id: String(args.id) },
+      data: { agentQueued: false, assignedAgent: pending ? "claude-code" : "mcp" },
+    });
+    return {
+      task,
+      sessionId: session.id,
+      instructions:
+        "Report progress with add_activity, ask blocking questions with request_input, and finish with submit_result. The user reviews your result before the task completes.",
+    };
+  }
+
+  // ── Agent session tools ──────────────────────────────────────────────────
+
+  if (name === "add_activity" || name === "request_input" || name === "get_session" || name === "submit_result" || name === "report_error") {
+    const session = await prisma.agentSession.findFirst({
+      where: { id: String(args.sessionId), userId },
+    });
+    if (!session) throw new Error("Agent session not found");
+
+    if (name === "get_session") {
+      return {
+        id: session.id,
+        status: session.status,
+        question: session.question,
+        answer: session.answer,
+        reviewFeedback: session.reviewFeedback,
+        resultSummary: session.resultSummary,
+        taskId: session.taskId,
+      };
+    }
+
+    const terminal = ["COMPLETE", "ERROR"];
+    if (terminal.includes(session.status)) {
+      throw new Error(`Session is ${session.status} and can no longer be updated`);
+    }
+
+    if (name === "add_activity") {
+      const type = String(args.type) === "ACTION" ? "ACTION" : "THOUGHT";
+      await addActivity(
+        session.id,
+        type,
+        String(args.content ?? ""),
+        args.toolName ? String(args.toolName).slice(0, 100) : undefined
+      );
+      // An activity from the agent means it is working
+      if (session.status === "PENDING" || session.status === "STALE") {
+        await prisma.agentSession.update({ where: { id: session.id }, data: { status: "ACTIVE" } });
+      }
+      return { ok: true };
+    }
+
+    if (name === "request_input") {
+      await requestInput(session.id, String(args.question ?? ""));
+      return {
+        ok: true,
+        status: "AWAITING_INPUT",
+        instructions: "Poll get_session until status returns to ACTIVE; the user's reply will be in the answer field.",
+      };
+    }
+
+    if (name === "submit_result") {
+      await submitResult(session.id, session.taskId, String(args.summary ?? "Work submitted for review"));
+      return {
+        ok: true,
+        status: "NEEDS_REVIEW",
+        note: "The task is now awaiting human review. It will be completed when the user accepts your result.",
+      };
+    }
+
+    // report_error
+    await failSession(session.id, String(args.message ?? "Agent reported an error"));
+    await prisma.task.update({ where: { id: session.taskId }, data: { agentQueued: false } });
+    return { ok: true, status: "ERROR" };
   }
 
   throw new Error(`Unknown tool: ${name}`);

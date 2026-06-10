@@ -14,8 +14,11 @@ import type { Components } from "react-markdown";
 import { toast } from "sonner";
 import { SendToClaudeModal } from "./SendToClaudeModal";
 import { AgentRunModal } from "./AgentRunModal";
+import { AgentSessionPanel } from "@/components/agents/AgentSessionPanel";
+import { SubtasksSection, LinksSection, CommentsSection } from "./TaskExtras";
 
 interface LabelEntry { name: string; color: string; }
+interface ProjectEntry { id: string; name: string; color: string; }
 
 const LABEL_COLORS = [
   "#6366f1","#8b5cf6","#ec4899","#ef4444","#f97316",
@@ -137,7 +140,9 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH">("MEDIUM");
-  const [status, setStatus] = useState<"INBOX" | "SCHEDULED" | "COMPLETED" | "CANCELLED">("INBOX");
+  const [status, setStatus] = useState<"INBOX" | "SCHEDULED" | "NEEDS_REVIEW" | "COMPLETED" | "CANCELLED">("INBOX");
+  const [projectId, setProjectId] = useState<string>("none");
+  const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [scheduledDate, setScheduledDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [duration, setDuration] = useState("");
@@ -151,6 +156,7 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
 
   useEffect(() => {
     fetch("/api/labels").then(r => r.ok ? r.json() : []).then(setLabelPalette);
+    fetch("/api/projects").then(r => r.ok ? r.json() : []).then(setProjects);
   }, []);
 
   useEffect(() => {
@@ -159,7 +165,8 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
       setDescription(task.description ?? "");
       setNotes(task.notes ?? "");
       setPriority(task.priority as "LOW" | "MEDIUM" | "HIGH");
-      setStatus(task.status as "INBOX" | "SCHEDULED" | "COMPLETED" | "CANCELLED");
+      setStatus(task.status as typeof status);
+      setProjectId(task.projectId ?? "none");
       setScheduledDate(task.scheduledDate ? String(task.scheduledDate).slice(0, 10) : "");
       setStartTime(task.startTime ?? "");
       setDuration(task.duration?.toString() ?? "");
@@ -227,6 +234,7 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
       if (status === "SCHEDULED") updates.status = "INBOX";
     }
     updates.labels = labels.length > 0 ? labels : null;
+    updates.projectId = projectId === "none" ? null : projectId;
     await onUpdate(task!.id, updates as Partial<Task>);
     setSaving(false);
     onOpenChange(false);
@@ -334,6 +342,9 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
             editRows={3}
           />
 
+          {/* Agent sessions — activity thread, review gate, Q&A */}
+          <AgentSessionPanel taskId={task.id} onTaskChanged={() => onUpdate(task!.id, {})} />
+
           {/* Metadata */}
           <div className="space-y-3 pt-1 border-t border-border/30">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60 pt-1">
@@ -364,8 +375,28 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
                   <SelectContent>
                     <SelectItem value="INBOX">Inbox</SelectItem>
                     <SelectItem value="SCHEDULED">Scheduled</SelectItem>
+                    <SelectItem value="NEEDS_REVIEW">Needs review</SelectItem>
                     <SelectItem value="COMPLETED">Completed</SelectItem>
                     <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 space-y-1">
+                <label className="text-xs text-muted-foreground">Project</label>
+                <Select value={projectId} onValueChange={(v) => setProjectId(v ?? "none")}>
+                  <SelectTrigger className="h-8 text-sm bg-transparent border-border/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No project</SelectItem>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        <span className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
+                          {p.name}
+                        </span>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -466,6 +497,15 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
               )}
             </div>
           </div>
+
+          {/* Subtasks */}
+          <SubtasksSection task={task} />
+
+          {/* Linked issues (GitHub / Jira) with resolution sync */}
+          <LinksSection task={task} />
+
+          {/* Comments */}
+          <CommentsSection task={task} />
         </div>
 
         {/* Footer */}

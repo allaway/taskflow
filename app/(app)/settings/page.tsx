@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,10 @@ interface UserSettings {
   claudeCodeRoutineId: string | null;
   claudeCodeRoutineToken: string | null;
   hasClaudeCodeRoutine: boolean;
+  githubToken: string | null;
+  jiraSiteUrl: string | null;
+  jiraEmail: string | null;
+  jiraApiToken: string | null;
 }
 
 interface ApiToken {
@@ -80,6 +84,15 @@ export default function SettingsPage() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
 
+  // Issue tracker integrations
+  const [githubToken, setGithubToken] = useState("");
+  const [jiraSiteUrl, setJiraSiteUrl] = useState("");
+  const [jiraEmail, setJiraEmail] = useState("");
+  const [jiraApiToken, setJiraApiToken] = useState("");
+  const [savingIntegrations, setSavingIntegrations] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
+
   // API tokens
   const [tokens, setTokens] = useState<ApiToken[]>([]);
   const [tokensLoading, setTokensLoading] = useState(true);
@@ -102,6 +115,10 @@ export default function SettingsPage() {
         setGoogleEmail(data.googleEmail ?? null);
         setRoutineId(data.claudeCodeRoutineId ?? "");
         setRoutineToken(data.claudeCodeRoutineToken ?? "");
+        setGithubToken(data.githubToken ?? "");
+        setJiraSiteUrl(data.jiraSiteUrl ?? "");
+        setJiraEmail(data.jiraEmail ?? "");
+        setJiraApiToken(data.jiraApiToken ?? "");
         setLoading(false);
 
         // Show success/error toasts from OAuth callback redirect
@@ -166,6 +183,48 @@ export default function SettingsPage() {
     setSaving(false);
     if (res.ok) toast.success("Profile saved");
     else toast.error("Failed to save profile");
+  }
+
+  async function saveIntegrations() {
+    setSavingIntegrations(true);
+    const res = await fetch("/api/user/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        githubToken: githubToken || null,
+        jiraSiteUrl: jiraSiteUrl || null,
+        jiraEmail: jiraEmail || null,
+        jiraApiToken: jiraApiToken || null,
+      }),
+    });
+    setSavingIntegrations(false);
+    if (res.ok) toast.success("Integration settings saved");
+    else {
+      const err = await res.json().catch(() => null);
+      toast.error(err?.error ? `Failed to save: ${JSON.stringify(err.error)}` : "Failed to save integrations");
+    }
+  }
+
+  async function importTasks(file: File) {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const res = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(json),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(`Imported ${data.imported} tasks`);
+      } else {
+        toast.error("Import failed — is this a TaskFlow JSON export?");
+      }
+    } catch {
+      toast.error("Could not parse file as JSON");
+    }
+    setImporting(false);
   }
 
   async function disconnectGoogle() {
@@ -255,6 +314,9 @@ export default function SettingsPage() {
           </TabsTrigger>
           <TabsTrigger value="calendar" className="flex-1 h-7 gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-none">
             <CalendarDays className="h-3.5 w-3.5" />Calendar
+          </TabsTrigger>
+          <TabsTrigger value="integrations" className="flex-1 h-7 gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-none">
+            <Link2 className="h-3.5 w-3.5" />Issues
           </TabsTrigger>
           <TabsTrigger value="api" className="flex-1 h-7 gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:shadow-none">
             <Key className="h-3.5 w-3.5" />API
@@ -515,6 +577,97 @@ Be thorough. Write real, useful output — not a summary of what you would do.`}
         </TabsContent>
 
         {/* API Tokens */}
+        {/* Issue tracker integrations */}
+        <TabsContent value="integrations" className="mt-4 space-y-4">
+          <Section
+            title="GitHub"
+            description="Completing a TaskFlow task that links a GitHub issue closes that issue automatically."
+          >
+            <FieldRow
+              label="Personal access token"
+              hint={
+                <>Needs <code className="font-mono">issues: write</code> on the repos you link. Create one at github.com/settings/tokens. Stored encrypted.</>
+              }
+            >
+              <Input
+                type="password"
+                placeholder="ghp_… or github_pat_…"
+                value={githubToken}
+                onChange={(e) => setGithubToken(e.target.value)}
+                className="h-8 text-sm font-mono"
+              />
+            </FieldRow>
+          </Section>
+
+          <Section
+            title="Jira"
+            description="Completing a task that links a Jira issue transitions the issue to Done."
+          >
+            <div className="space-y-3">
+              <FieldRow label="Site URL">
+                <Input
+                  placeholder="https://yourorg.atlassian.net"
+                  value={jiraSiteUrl}
+                  onChange={(e) => setJiraSiteUrl(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </FieldRow>
+              <FieldRow label="Account email">
+                <Input
+                  type="email"
+                  placeholder="you@company.com"
+                  value={jiraEmail}
+                  onChange={(e) => setJiraEmail(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </FieldRow>
+              <FieldRow
+                label="API token"
+                hint="Create at id.atlassian.com/manage-profile/security/api-tokens. Stored encrypted."
+              >
+                <Input
+                  type="password"
+                  placeholder="Jira API token"
+                  value={jiraApiToken}
+                  onChange={(e) => setJiraApiToken(e.target.value)}
+                  className="h-8 text-sm font-mono"
+                />
+              </FieldRow>
+            </div>
+          </Section>
+
+          <Button size="sm" onClick={saveIntegrations} disabled={savingIntegrations}>
+            {savingIntegrations ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
+            Save integrations
+          </Button>
+
+          <Section title="Data" description="Export your tasks, or import a previous TaskFlow JSON export.">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button size="sm" variant="outline" onClick={() => window.open("/api/export?format=json", "_blank")}>
+                Export JSON
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => window.open("/api/export?format=csv", "_blank")}>
+                Export CSV
+              </Button>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) importTasks(file);
+                  e.target.value = "";
+                }}
+              />
+              <Button size="sm" variant="outline" disabled={importing} onClick={() => importFileRef.current?.click()}>
+                {importing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
+                Import JSON
+              </Button>
+            </div>
+          </Section>
+        </TabsContent>
+
         <TabsContent value="api" className="mt-4 space-y-4">
           <Section title="API Tokens" description="Use tokens to push tasks from any external service.">
             <FieldRow
