@@ -2,16 +2,20 @@
 import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Bot, CheckCircle2, AlertCircle, Loader2, Wrench, ChevronRight, FileText } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Bot, CheckCircle2, AlertCircle, Loader2, Wrench, ChevronRight, FileText, HelpCircle, ClipboardCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { Task } from "@prisma/client";
 
 type AgentEvent =
-  | { type: "start" }
+  | { type: "start"; sessionId: string }
   | { type: "text"; text: string }
   | { type: "tool_call"; name: string; input: Record<string, unknown> }
   | { type: "tool_result"; name: string; result: string }
-  | { type: "done"; taskId: string }
+  | { type: "awaiting_input"; sessionId: string; question: string }
+  | { type: "needs_review"; sessionId: string; summary: string }
+  | { type: "done"; taskId: string; sessionId: string }
   | { type: "error"; message: string };
 
 type LogEntry =
@@ -23,7 +27,8 @@ type LogEntry =
 function toolLabel(name: string): string {
   switch (name) {
     case "write_notes": return "Writing notes";
-    case "complete_task": return "Completing task";
+    case "submit_result": return "Submitting for review";
+    case "ask_user": return "Asking you a question";
     case "create_subtask": return "Creating subtask";
     default: return name;
   }
@@ -32,7 +37,8 @@ function toolLabel(name: string): string {
 function toolIcon(name: string) {
   switch (name) {
     case "write_notes": return <FileText className="h-3.5 w-3.5" />;
-    case "complete_task": return <CheckCircle2 className="h-3.5 w-3.5" />;
+    case "submit_result": return <ClipboardCheck className="h-3.5 w-3.5" />;
+    case "ask_user": return <HelpCircle className="h-3.5 w-3.5" />;
     default: return <Wrench className="h-3.5 w-3.5" />;
   }
 }
@@ -42,7 +48,8 @@ function toolDetail(name: string, input: Record<string, unknown>): string {
     const preview = String(input.content ?? "").slice(0, 80);
     return preview.length < String(input.content ?? "").length ? `${preview}…` : preview;
   }
-  if (name === "complete_task") return String(input.summary ?? "");
+  if (name === "submit_result") return String(input.summary ?? "");
+  if (name === "ask_user") return String(input.question ?? "");
   if (name === "create_subtask") return String(input.title ?? "");
   return "";
 }
@@ -56,8 +63,13 @@ interface AgentRunModalProps {
 
 export function AgentRunModal({ task, open, onOpenChange, onDone }: AgentRunModalProps) {
   const [log, setLog] = useState<LogEntry[]>([]);
-  const [status, setStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "running" | "awaiting_input" | "needs_review" | "done" | "error">("idle");
   const [pendingText, setPendingText] = useState("");
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [reviewSummary, setReviewSummary] = useState("");
+  const [busy, setBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -70,16 +82,16 @@ export function AgentRunModal({ task, open, onOpenChange, onDone }: AgentRunModa
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [log, pendingText]);
+  }, [log, pendingText, status]);
 
   function flushPending(text: string) {
     if (!text.trim()) return;
     setLog((prev) => [...prev, { kind: "thinking", text: text.trim() }]);
   }
 
-  async function startAgent() {
+  async function startAgent(resumeSessionId?: string) {
     setStatus("running");
-    setLog([]);
+    if (!resumeSessionId) setLog([]);
     setPendingText("");
 
     const abort = new AbortController();
@@ -88,12 +100,14 @@ export function AgentRunModal({ task, open, onOpenChange, onDone }: AgentRunModa
     try {
       const res = await fetch(`/api/tasks/${task.id}/run-agent`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(resumeSessionId ? { sessionId: resumeSessionId } : {}),
         signal: abort.signal,
       });
 
       if (!res.ok) {
         const msg = await res.text();
-        setLog([{ kind: "error", message: msg }]);
+        setLog((prev) => [...prev, { kind: "error", message: msg }]);
         setStatus("error");
         return;
       }
@@ -120,6 +134,10 @@ export function AgentRunModal({ task, open, onOpenChange, onDone }: AgentRunModa
             continue;
           }
 
+          if (event.type === "start") {
+            setSessionId(event.sessionId);
+          }
+
           if (event.type === "text") {
             accText += event.text;
             setPendingText(accText);
@@ -136,11 +154,29 @@ export function AgentRunModal({ task, open, onOpenChange, onDone }: AgentRunModa
             setLog((prev) => [...prev, { kind: "tool", name: event.name, detail }]);
           }
 
+          if (event.type === "awaiting_input") {
+            if (accText.trim()) flushPending(accText);
+            setPendingText("");
+            setSessionId(event.sessionId);
+            setQuestion(event.question);
+            setStatus("awaiting_input");
+            onDone?.();
+          }
+
+          if (event.type === "needs_review") {
+            if (accText.trim()) flushPending(accText);
+            setPendingText("");
+            setSessionId(event.sessionId);
+            setReviewSummary(event.summary);
+            setStatus("needs_review");
+            onDone?.();
+          }
+
           if (event.type === "done") {
             if (accText.trim()) flushPending(accText);
             setPendingText("");
             setLog((prev) => [...prev, { kind: "done" }]);
-            setStatus("done");
+            setStatus((s) => (s === "needs_review" ? s : "done"));
             onDone?.();
           }
 
@@ -160,6 +196,48 @@ export function AgentRunModal({ task, open, onOpenChange, onDone }: AgentRunModa
     }
   }
 
+  async function submitAnswer() {
+    if (!sessionId || !answer.trim()) return;
+    setBusy(true);
+    const res = await fetch(`/api/agent-sessions/${sessionId}/answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answer: answer.trim() }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error("Failed to send answer");
+      return;
+    }
+    setAnswer("");
+    setQuestion("");
+    // Resume the loop with the answer in context
+    startAgent(sessionId);
+  }
+
+  async function acceptResult() {
+    if (!sessionId) return;
+    setBusy(true);
+    const res = await fetch(`/api/agent-sessions/${sessionId}/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "accept" }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      const data = await res.json();
+      const failed = (data.linkSync ?? []).filter((s: { ok: boolean }) => !s.ok);
+      for (const f of failed) {
+        toast.error(`Could not resolve ${f.provider} link ${f.externalKey}: ${f.error}`);
+      }
+      toast.success("Accepted — task completed");
+      setStatus("done");
+      onDone?.();
+    } else {
+      toast.error("Failed to accept");
+    }
+  }
+
   function handleClose() {
     if (status === "running") {
       abortRef.current?.abort();
@@ -170,6 +248,9 @@ export function AgentRunModal({ task, open, onOpenChange, onDone }: AgentRunModa
       setStatus("idle");
       setLog([]);
       setPendingText("");
+      setSessionId(null);
+      setQuestion("");
+      setReviewSummary("");
     }, 300);
   }
 
@@ -183,7 +264,9 @@ export function AgentRunModal({ task, open, onOpenChange, onDone }: AgentRunModa
           </DialogTitle>
           <DialogDescription className="text-xs">
             {status === "running" && "Working on your task…"}
-            {status === "done" && "Task complete. Notes have been updated."}
+            {status === "awaiting_input" && "The agent needs your input to continue."}
+            {status === "needs_review" && "The agent finished — review its work below."}
+            {status === "done" && "Session finished. Notes have been updated."}
             {status === "error" && "Agent encountered an error."}
             {status === "idle" && "Starting…"}
           </DialogDescription>
@@ -244,6 +327,48 @@ export function AgentRunModal({ task, open, onOpenChange, onDone }: AgentRunModa
             <div className="flex items-center gap-2 text-muted-foreground/50">
               <Loader2 className={cn("h-3.5 w-3.5 animate-spin")} />
               <span>thinking…</span>
+            </div>
+          )}
+
+          {/* Elicitation: agent asked a question */}
+          {status === "awaiting_input" && (
+            <div className="rounded-md border border-amber-300 bg-amber-50/60 dark:bg-amber-950/20 p-3 space-y-2 font-sans">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                <HelpCircle className="h-3.5 w-3.5" /> The agent is asking:
+              </p>
+              <p className="text-sm whitespace-pre-wrap">{question}</p>
+              <Textarea
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder="Type your answer…"
+                rows={2}
+                className="text-sm bg-background"
+                autoFocus
+              />
+              <Button size="sm" onClick={submitAnswer} disabled={busy || !answer.trim()}>
+                Send answer &amp; continue
+              </Button>
+            </div>
+          )}
+
+          {/* Review gate: agent submitted its result */}
+          {status === "needs_review" && (
+            <div className="rounded-md border border-orange-300 bg-orange-50/60 dark:bg-orange-950/20 p-3 space-y-2 font-sans">
+              <p className="text-xs font-medium text-orange-800 dark:text-orange-300 flex items-center gap-1.5">
+                <ClipboardCheck className="h-3.5 w-3.5" /> Submitted for your review:
+              </p>
+              <p className="text-sm whitespace-pre-wrap">{reviewSummary}</p>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={acceptResult} disabled={busy}>
+                  Accept &amp; complete task
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleClose}>
+                  Review later
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                You can also send the work back with feedback from the task&apos;s Agent activity panel.
+              </p>
             </div>
           )}
 

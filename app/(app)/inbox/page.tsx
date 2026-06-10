@@ -2,8 +2,11 @@
 import { useEffect, useState } from "react";
 import { TaskCard } from "@/components/tasks/TaskCard";
 import { TaskForm } from "@/components/tasks/TaskForm";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Inbox } from "lucide-react";
+import { Inbox, CheckSquare, Square, Trash2, CalendarDays, Bot, CheckCircle2, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Task } from "@prisma/client";
 
@@ -13,6 +16,9 @@ export default function InboxPage() {
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDate, setBulkDate] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -53,6 +59,39 @@ export default function InboxPage() {
     else toast.error("Failed to delete task");
   }
 
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelected(new Set());
+    setBulkDate("");
+  }
+
+  async function bulkAction(action: string, extra: Record<string, unknown> = {}) {
+    if (selected.size === 0) return;
+    const res = await fetch("/api/tasks/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: Array.from(selected), action, ...extra }),
+    });
+    if (res.ok) {
+      const { affected } = await res.json();
+      toast.success(`${affected} task${affected === 1 ? "" : "s"} updated`);
+      exitSelectMode();
+      fetchTasks();
+    } else {
+      const err = await res.json().catch(() => null);
+      toast.error(err?.error?.toString?.() ?? "Bulk action failed");
+    }
+  }
+
   const filtered = tasks
     .filter((t) => priorityFilter === "all" || t.priority === priorityFilter)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -74,6 +113,16 @@ export default function InboxPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant={selectMode ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+            data-testid="bulk-select-toggle"
+          >
+            {selectMode ? <X className="h-3.5 w-3.5 mr-1" /> : <CheckSquare className="h-3.5 w-3.5 mr-1" />}
+            {selectMode ? "Cancel" : "Select"}
+          </Button>
           <Select value={filter} onValueChange={(v) => setFilter(v ?? "all")}>
             <SelectTrigger className="h-7 w-32 text-xs bg-transparent border-border/60">
               <SelectValue />
@@ -99,8 +148,68 @@ export default function InboxPage() {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {selectMode && (
+        <div className="flex items-center gap-2 flex-wrap rounded-xl border border-primary/30 bg-primary/5 px-3 py-2" data-testid="bulk-action-bar">
+          <span className="text-xs font-medium text-muted-foreground">
+            {selected.size} selected
+          </span>
+          <button
+            className="text-xs text-primary hover:underline"
+            onClick={() => setSelected(new Set(filtered.map((t) => t.id)))}
+          >
+            Select all
+          </button>
+          <div className="flex items-center gap-1.5 ml-auto flex-wrap">
+            <Input
+              type="date"
+              value={bulkDate}
+              onChange={(e) => setBulkDate(e.target.value)}
+              className="h-7 w-36 text-xs bg-background"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              disabled={selected.size === 0 || !bulkDate}
+              onClick={() => bulkAction("schedule", { scheduledDate: new Date(bulkDate + "T00:00:00.000Z").toISOString() })}
+            >
+              <CalendarDays className="h-3.5 w-3.5 mr-1" /> Schedule
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              disabled={selected.size === 0}
+              onClick={() => bulkAction("delegate")}
+              title="Queue selected tasks for an AI agent to pick up via MCP"
+            >
+              <Bot className="h-3.5 w-3.5 mr-1" /> Delegate to AI
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              disabled={selected.size === 0}
+              onClick={() => bulkAction("complete")}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Complete
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs text-destructive hover:text-destructive"
+              disabled={selected.size === 0}
+              onClick={() => bulkAction("delete")}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Add task */}
-      <TaskForm onSubmit={addTask} compact />
+      {!selectMode && <TaskForm onSubmit={addTask} compact />}
 
       {/* List */}
       {loading ? (
@@ -122,12 +231,30 @@ export default function InboxPage() {
       ) : (
         <div className="space-y-1.5" data-testid="task-list">
           {filtered.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onUpdate={updateTask}
-              onDelete={deleteTask}
-            />
+            <div key={task.id} className={cn("flex items-start gap-2", selectMode && "cursor-pointer")}>
+              {selectMode && (
+                <button
+                  onClick={() => toggleSelect(task.id)}
+                  className="mt-3 shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                  data-testid="bulk-select-checkbox"
+                >
+                  {selected.has(task.id) ? (
+                    <CheckSquare className="h-4 w-4 text-primary" />
+                  ) : (
+                    <Square className="h-4 w-4" />
+                  )}
+                </button>
+              )}
+              <div className="flex-1 min-w-0" onClick={selectMode ? () => toggleSelect(task.id) : undefined}>
+                <div className={cn(selectMode && "pointer-events-none")}>
+                  <TaskCard
+                    task={task}
+                    onUpdate={updateTask}
+                    onDelete={deleteTask}
+                  />
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       )}

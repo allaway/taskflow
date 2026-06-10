@@ -21,6 +21,28 @@ openssl rand -hex 32
 openssl rand -base64 24
 ```
 
+## Health Checks
+
+The app exposes `GET /api/health` which pings the database and returns
+`200 {"status":"ok","db":"up"}` or `503` when the database is unreachable.
+Point your platform's health probe at it:
+
+- **Railway:** Service → Settings → Health Check Path → `/api/health`
+- **nginx / load balancer:** use `/api/health` as the upstream check
+- **Kubernetes:** use it for both liveness and readiness probes
+
+Environment variables are validated when the server boots — a missing or
+malformed `DATABASE_URL`, `NEXTAUTH_SECRET`/`AUTH_SECRET`, or
+`FIELD_ENCRYPTION_KEY` fails startup with a message listing every problem.
+
+## Scaling Notes
+
+- Rate limiting is in-memory (per instance). If you run more than one
+  replica, swap `lib/rateLimit.ts` to a Redis-backed store
+  (`rate-limiter-flexible` supports this directly).
+- Agent session staleness is computed lazily on read, so no background
+  worker is required.
+
 ---
 
 ## Option A: Railway (Recommended — 5 minutes)

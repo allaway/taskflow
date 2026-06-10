@@ -2,11 +2,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Trash2, Wand2, Clock } from "lucide-react";
+import { MoreHorizontal, Trash2, Wand2, Clock, ListTree, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Task } from "@prisma/client";
+import type { TaskWithMeta } from "@/lib/types";
 import { GeneratePromptModal } from "@/components/ai/GeneratePromptModal";
 import { TaskEditModal } from "@/components/tasks/TaskEditModal";
+import { AgentBadge } from "@/components/agents/AgentBadge";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
@@ -71,6 +73,13 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
     if (Array.isArray(parsed)) labels = parsed;
   } catch { /* ignore */ }
 
+  const meta = task as TaskWithMeta;
+  const latestSession = meta.agentSessions?.[0];
+  const showAgentBadge =
+    latestSession && (task.agentQueued || !["COMPLETE", "ERROR"].includes(latestSession.status) || task.status === "NEEDS_REVIEW");
+  const subtaskCount = meta._count?.subtasks ?? 0;
+  const commentCount = meta._count?.comments ?? 0;
+
   return (
     <>
       <div
@@ -123,8 +132,21 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
           )}
 
           {/* Meta row */}
-          {(labels.length > 0 || src || (showTime && task.startTime)) && (
+          {(labels.length > 0 || src || showAgentBadge || meta.project || subtaskCount > 0 || commentCount > 0 || (showTime && task.startTime)) && (
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              {showAgentBadge && latestSession && <AgentBadge status={latestSession.status} />}
+              {meta.project && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded-md font-medium ring-1"
+                  style={{
+                    color: meta.project.color,
+                    backgroundColor: meta.project.color + "15",
+                    borderColor: meta.project.color + "40",
+                  }}
+                >
+                  {meta.project.name}
+                </span>
+              )}
               {labels.map((label: string) => (
                 <span key={label} className="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/8 text-primary font-medium ring-1 ring-primary/15">
                   {label}
@@ -133,6 +155,16 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
               {src && (
                 <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-md", src.cls)}>
                   {src.text}
+                </span>
+              )}
+              {subtaskCount > 0 && (
+                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                  <ListTree className="h-3 w-3" /> {subtaskCount}
+                </span>
+              )}
+              {commentCount > 0 && (
+                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                  <MessageSquare className="h-3 w-3" /> {commentCount}
                 </span>
               )}
               {showTime && task.startTime && (
