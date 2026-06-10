@@ -24,12 +24,18 @@ export async function GET() {
       googleEmail: true,
       claudeCodeRoutineId: true,
       claudeCodeRoutineToken: true,
+      githubToken: true,
+      jiraSiteUrl: true,
+      jiraEmail: true,
+      jiraApiToken: true,
     },
   });
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const decryptedApiKey = decryptNullable(user.aiApiKey);
   const decryptedRoutineToken = decryptNullable(user.claudeCodeRoutineToken);
+  const decryptedGithubToken = decryptNullable(user.githubToken);
+  const decryptedJiraToken = decryptNullable(user.jiraApiToken);
 
   return NextResponse.json({
     ...user,
@@ -39,6 +45,8 @@ export async function GET() {
     labelPalette: user.labelPalette ? JSON.parse(user.labelPalette) : [],
     claudeCodeRoutineToken: decryptedRoutineToken ? maskSecret(decryptedRoutineToken) : null,
     hasClaudeCodeRoutine: !!(user.claudeCodeRoutineId && user.claudeCodeRoutineToken),
+    githubToken: decryptedGithubToken ? maskSecret(decryptedGithubToken) : null,
+    jiraApiToken: decryptedJiraToken ? maskSecret(decryptedJiraToken) : null,
   });
 }
 
@@ -112,6 +120,20 @@ export async function PATCH(req: NextRequest) {
   if (parsed.data.claudeCodeRoutineId !== undefined) {
     updates.claudeCodeRoutineId = parsed.data.claudeCodeRoutineId || null;
   }
+
+  // Issue tracker credentials (encrypted; masked values mean "keep existing")
+  for (const field of ["githubToken", "jiraApiToken"] as const) {
+    const value = parsed.data[field];
+    if (value === undefined) continue;
+    if (value === null || value === "") {
+      updates[field] = null;
+    } else if (!value.includes("...")) {
+      updates[field] = encryptNullable(value);
+    }
+    // masked value → leave unchanged
+  }
+  if (parsed.data.jiraSiteUrl !== undefined) updates.jiraSiteUrl = parsed.data.jiraSiteUrl || null;
+  if (parsed.data.jiraEmail !== undefined) updates.jiraEmail = parsed.data.jiraEmail || null;
 
   const user = await prisma.user.update({
     where: { id: session.user.id },

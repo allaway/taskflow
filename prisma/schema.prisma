@@ -40,9 +40,33 @@ model User {
   claudeCodeRoutineId    String?  // e.g. "routine_01HJKLMN…"
   claudeCodeRoutineToken String?  // AES-256-GCM encrypted bearer token
 
+  // External issue tracker credentials (encrypted) for resolution sync
+  githubToken  String?  // AES-256-GCM encrypted personal access token
+  jiraSiteUrl  String?  // e.g. "https://yourorg.atlassian.net"
+  jiraEmail    String?
+  jiraApiToken String?  // AES-256-GCM encrypted
+
   tasks                Task[]
   apiTokens            ApiToken[]
   cachedCalendarEvents CachedCalendarEvent[]
+  projects             Project[]
+  agentSessions        AgentSession[]
+  comments             Comment[]
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   @default("#6366f1")
+  archived  Boolean  @default(false)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId])
 }
 
 model Task {
@@ -65,10 +89,21 @@ model Task {
   userId        String
   user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Hierarchy & grouping
+  projectId     String?
+  project       Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parentId      String?
+  parent        Task?      @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks      Task[]     @relation("Subtasks")
+
   completedAt   DateTime?  // set when status → COMPLETED
   daysOverdue   Int        @default(0)  // incremented each time task slides forward
   agentQueued   Boolean    @default(false)  // task is queued for an AI agent to pick up
+  assignedAgent String?    // "in-app" | "claude-code" | "mcp" — null means the user owns execution
 
+  agentSessions AgentSession[]
+  comments      Comment[]
+  links         TaskLink[]
 
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -76,12 +111,16 @@ model Task {
   @@index([userId])
   @@index([userId, scheduledDate])
   @@index([userId, status])
+  @@index([userId, completedAt])
+  @@index([parentId])
+  @@index([projectId])
   @@unique([userId, externalId])
 }
 
 enum TaskStatus {
   INBOX
   SCHEDULED
+  NEEDS_REVIEW
   COMPLETED
   CANCELLED
 }
@@ -96,6 +135,105 @@ enum TaskSource {
   MANUAL
   API
   RECURRING
+}
+
+// ── Agent delegation ──────────────────────────────────────────────────────────
+
+model AgentSession {
+  id                String             @id @default(cuid())
+  taskId            String
+  task              Task               @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  agentType         String             // "in-app" | "claude-code" | "mcp"
+  agentName         String?            // display name: model id, routine id, or MCP client name
+  status            AgentSessionStatus @default(PENDING)
+
+  sessionUrl        String?            // "watch live" link (e.g. Claude Code session URL)
+  externalSessionId String?
+
+  question          String?            // pending elicitation when AWAITING_INPUT
+  answer            String?            // the user's reply to the pending question
+  resultSummary     String?            // proposed result submitted by the agent
+  reviewFeedback    String?            // user's feedback when sending work back
+  error             String?
+
+  startedAt         DateTime           @default(now())
+  lastActivityAt    DateTime           @default(now())
+  endedAt           DateTime?
+
+  activities        AgentActivity[]
+
+  @@index([taskId])
+  @@index([userId, status])
+}
+
+enum AgentSessionStatus {
+  PENDING
+  ACTIVE
+  AWAITING_INPUT
+  NEEDS_REVIEW
+  COMPLETE
+  ERROR
+  STALE
+}
+
+model AgentActivity {
+  id        String            @id @default(cuid())
+  sessionId String
+  session   AgentSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type      AgentActivityType
+  content   String
+  toolName  String?
+  createdAt DateTime          @default(now())
+
+  @@index([sessionId, createdAt])
+}
+
+enum AgentActivityType {
+  THOUGHT
+  ACTION
+  QUESTION
+  ANSWER
+  RESULT
+  ERROR
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  authorType String   @default("user") // "user" | "agent"
+  authorName String?
+  content    String
+  createdAt  DateTime @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+// External issue links (GitHub issue, Jira issue, plain URL) for resolution sync
+model TaskLink {
+  id             String           @id @default(cuid())
+  taskId         String
+  task           Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  provider       TaskLinkProvider
+  externalKey    String           // "owner/repo#123" or "PROJ-123" or the URL itself
+  url            String
+  syncOnComplete Boolean          @default(true)
+  lastSyncStatus String?          // "ok" or an error message from the last sync attempt
+  lastSyncedAt   DateTime?
+  createdAt      DateTime         @default(now())
+
+  @@index([taskId])
+}
+
+enum TaskLinkProvider {
+  GITHUB
+  JIRA
+  URL
 }
 
 model CachedCalendarEvent {
@@ -125,6 +263,7 @@ model ApiToken {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now())
   lastUsedAt  DateTime?
+  expiresAt   DateTime?
 
   @@index([userId])
 }
