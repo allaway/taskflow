@@ -21,8 +21,8 @@ export default defineConfig({
   ],
   webServer: process.env.CI
     ? {
-        // output: standalone requires node server.js, not next start
-        command: "node .next/standalone/server.js",
+        // output: standalone + monorepo tracing root → server at apps/web/ subpath
+        command: "node .next/standalone/apps/web/server.js",
         url: "http://localhost:3000",
         reuseExistingServer: false,
         timeout: 120000,
