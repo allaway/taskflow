@@ -2,7 +2,6 @@
  * Android contract tests for the Labels API.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NextRequest } from "next/server";
 import { AndroidLabelSchema, AndroidErrorResponseSchema } from "./contract.schemas";
 
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
@@ -21,10 +20,6 @@ import { GET } from "@/app/api/labels/route";
 const MOCK_SESSION = {
   user: { id: "clu_user_contract_001", email: "test@example.com" },
 };
-
-function makeReq(path: string): NextRequest {
-  return new NextRequest(`http://localhost:3000${path}`);
-}
 
 function assertLabelArray(body: unknown): void {
   if (!Array.isArray(body)) throw new Error("Response must be an array");

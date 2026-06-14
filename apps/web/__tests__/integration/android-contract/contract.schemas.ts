@@ -52,7 +52,7 @@ export const AndroidRegisterResponseSchema = z.object({
 });
 
 export const AndroidErrorResponseSchema = z.object({
-  error: z.union([z.string(), z.record(z.unknown())]),
+  error: z.union([z.string(), z.record(z.string(), z.unknown())]),
 });
 
 export type AndroidTask = z.infer<typeof AndroidTaskSchema>;
