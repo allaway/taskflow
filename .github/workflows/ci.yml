@@ -270,3 +270,38 @@ jobs:
           name: production-build-${{ github.sha }}
           path: apps/web/.next/standalone/
           retention-days: 30
+
+  release:
+    name: Release (on merge)
+    runs-on: ubuntu-latest
+    needs: [web-production-build, android-build]
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: debug-apk
+          path: dist/
+
+      - name: Rename APK
+        run: mv dist/app-debug.apk dist/taskflow-debug.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.sha }}
+          name: Build ${{ github.sha }}
+          body: |
+            Automated build from commit ${{ github.sha }}.
+
+            **Android APK**: Download `taskflow-debug.apk` below and install on your device.
+            Enable "Install from unknown sources" in Android settings first.
+          files: dist/taskflow-debug.apk
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
