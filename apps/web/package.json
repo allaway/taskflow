@@ -1,5 +1,5 @@
 {
-  "name": "task-management",
+  "name": "@taskflow/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -16,7 +16,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "prepare": "husky"
+    "prepare": "cd ../.. && husky"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
