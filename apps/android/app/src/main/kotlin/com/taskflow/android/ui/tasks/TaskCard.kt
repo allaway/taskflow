@@ -69,10 +69,10 @@ fun TaskCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (task.labels.isNotEmpty()) {
+                if (task.labelList.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        task.labels.take(3).forEach { label ->
+                        task.labelList.take(3).forEach { label ->
                             SuggestionChip(
                                 onClick = {},
                                 label = { Text(label, style = MaterialTheme.typography.labelSmall) },

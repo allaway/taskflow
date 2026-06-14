@@ -79,10 +79,10 @@ fun TaskDetailSheet(
                 )
             }
 
-            if (task.labels.isNotEmpty()) {
+            if (task.labelList.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    task.labels.forEach { label ->
+                    task.labelList.forEach { label ->
                         SuggestionChip(onClick = {}, label = { Text(label) })
                     }
                 }
