@@ -28,9 +28,7 @@ const nextConfig: NextConfig = {
   // Monorepo: trace from repo root so standalone bundles root node_modules.
   // This causes standalone to mirror the monorepo layout:
   //   .next/standalone/apps/web/server.js (not .next/standalone/server.js)
-  experimental: {
-    outputFileTracingRoot: path.join(__dirname, "../.."),
-  },
+  outputFileTracingRoot: path.join(__dirname, "../.."),
   serverExternalPackages: ["node-ical"],
   async headers() {
     return [
