@@ -21,7 +21,7 @@ interface TaskFlowApi {
     ): Response<Unit>
 
     @POST("api/auth/register")
-    suspend fun register(@Body request: RegisterRequest): Response<Unit>
+    suspend fun register(@Body request: RegisterRequest): Response<RegisterResponse>
 
     @GET("api/auth/session")
     suspend fun getSession(): Response<SessionResponse>
@@ -40,7 +40,7 @@ interface TaskFlowApi {
     @POST("api/tasks")
     suspend fun createTask(@Body request: CreateTaskRequest): Response<Task>
 
-    @PUT("api/tasks/{id}")
+    @PATCH("api/tasks/{id}")
     suspend fun updateTask(
         @Path("id") id: String,
         @Body request: UpdateTaskRequest,

@@ -29,3 +29,11 @@ data class SessionUser(
 
 @JsonClass(generateAdapter = false)
 data class SessionResponse(val user: SessionUser? = null)
+
+/** Response body from POST /api/auth/register (HTTP 201). */
+@JsonClass(generateAdapter = false)
+data class RegisterResponse(
+    val id: String,
+    val email: String,
+    val name: String? = null,
+)
