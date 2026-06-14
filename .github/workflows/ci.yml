@@ -260,7 +260,6 @@ jobs:
         run: npm run build --workspace=apps/web
 
       - name: Build Docker image
-        working-directory: apps/web
         run: |
           docker build -t taskflow:${{ github.sha }} .
           docker tag taskflow:${{ github.sha }} taskflow:latest
