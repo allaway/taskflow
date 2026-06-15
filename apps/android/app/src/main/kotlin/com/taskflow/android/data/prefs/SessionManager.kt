@@ -16,7 +16,7 @@ class SessionManager(private val context: Context) {
         private val KEY_BASE_URL = stringPreferencesKey("base_url")
         private val KEY_USER_EMAIL = stringPreferencesKey("user_email")
         private val KEY_USER_NAME = stringPreferencesKey("user_name")
-        const val DEFAULT_BASE_URL = "http://10.0.2.2:3000/"
+        const val DEFAULT_BASE_URL = "https://taskflow-production-585d.up.railway.app/"
     }
 
     val baseUrl: Flow<String> = context.dataStore.data.map { prefs ->
