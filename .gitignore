@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -11,17 +11,32 @@
 !.yarn/versions
 
 # testing
-/coverage
+coverage
 
 # next.js
-/.next/
+.next/
 /out/
 
 # production
 /build
 
-# misc
+# Android
+*.iml
+.gradle
+/local.properties
+/.idea
 .DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+apps/android/app/release/
+apps/android/app/debug/
+apps/android/.gradle/
+apps/android/gradle/wrapper/gradle-wrapper.jar
+
+# misc
 *.pem
 
 # debug
@@ -36,8 +51,8 @@ yarn-error.log*
 .env.*.local
 
 # playwright
-/playwright-report/
-/test-results/
+playwright-report/
+test-results/
 
 # vercel
 .vercel
@@ -46,7 +61,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-/lib/generated/prisma
+apps/web/lib/generated/prisma
 
 # local credentials — never commit
 creds.yaml

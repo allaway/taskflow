@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
@@ -21,6 +22,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Monorepo: trace from repo root so standalone bundles root node_modules.
+  // This causes standalone to mirror the monorepo layout:
+  //   .next/standalone/apps/web/server.js (not .next/standalone/server.js)
+  outputFileTracingRoot: path.resolve("../.."),
   serverExternalPackages: ["node-ical"],
   async headers() {
     return [
