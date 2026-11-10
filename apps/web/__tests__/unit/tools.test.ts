@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { TOOLS, callTool, taskAgentTools } from "@/lib/tools/registry";
+import { ASSISTANT_TOOLS, TOOLS, callTool, taskAgentTools } from "@/lib/tools/registry";
 import { extractKeywords, scoreItem } from "@/lib/relevance";
 import { buildRankPrompt } from "@/lib/services/catchup";
 import { parseScheduledDate, dayRange } from "@/lib/services/tasks";
@@ -14,6 +14,13 @@ describe("tool registry", () => {
       expect(names).toContain(legacy);
     }
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("keeps permanent deletion away from the in-app assistant", () => {
+    const names = ASSISTANT_TOOLS.map((t) => t.name);
+    expect(names).not.toContain("delete_task");
+    expect(names).toContain("update_task");
+    expect(ASSISTANT_TOOLS).toHaveLength(TOOLS.length - 1);
   });
 
   it("exposes planning, thread and catch-up tools", () => {

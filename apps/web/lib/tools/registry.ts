@@ -296,6 +296,15 @@ export const TOOLS: Tool[] = [
   ),
 ];
 
+/**
+ * Tools the in-app assistant does not get. It reads content written by other
+ * people (catch-up items, thread messages, task notes), so anything it does
+ * must be undoable: it can cancel a task but not permanently delete one.
+ * External MCP clients keep the full list and apply their own approval prompts.
+ */
+const ASSISTANT_EXCLUDED = new Set(["delete_task"]);
+export const ASSISTANT_TOOLS: Tool[] = TOOLS.filter((t) => !ASSISTANT_EXCLUDED.has(t.name));
+
 export async function callTool(name: string, args: unknown, ctx: ToolContext): Promise<unknown> {
   const tool = TOOLS.find((t) => t.name === name);
   if (!tool) throw new ServiceError(`Unknown tool: ${name}`, 404);

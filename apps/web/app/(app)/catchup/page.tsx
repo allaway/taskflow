@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import type { CatchUpItem } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { untrustedMarkdown } from "@/lib/safeMarkdown";
 
 const SOURCE_STYLE: Record<string, string> = {
   agent: "text-violet-600 bg-violet-500/10",
@@ -240,14 +241,7 @@ export default function CatchUpPage() {
                 </div>
                 <div className="flex-1 overflow-y-auto px-6 py-4 text-sm leading-relaxed break-words [&_p]:mb-2 [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_a]:text-primary [&_a]:underline [&_pre]:overflow-x-auto [&_code]:font-mono [&_code]:text-[12px]">
                   {selected.body ? (
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        a: ({ href, children }) => (
-                          <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
-                        ),
-                      }}
-                    >
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={untrustedMarkdown}>
                       {selected.body}
                     </ReactMarkdown>
                   ) : (

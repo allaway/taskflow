@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { AgentEvent } from "@/lib/agent";
+import { untrustedMarkdown } from "@/lib/safeMarkdown";
 
 export interface ChatMessage {
   id: string;
@@ -211,7 +212,7 @@ export function ThreadChat({
 function AgentBubble({ content }: { content: string }) {
   return (
     <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-muted/60 px-3.5 py-2 text-sm leading-relaxed break-words [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_code]:font-mono [&_code]:text-[12px] [&_pre]:overflow-x-auto [&_a]:text-primary [&_a]:underline [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-medium">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={untrustedMarkdown}>{content}</ReactMarkdown>
     </div>
   );
 }
