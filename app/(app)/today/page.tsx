@@ -3,10 +3,11 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState, useRef } from "react";
 import { format, addDays, subDays, startOfDay, isToday } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Wand2, Plus, Sunrise, Moon } from "lucide-react";
+import { ChevronLeft, ChevronRight, MessageSquare, Plus, Sunrise, Moon, Target } from "lucide-react";
 import { TaskCard } from "@/components/tasks/TaskCard";
 import { TaskForm } from "@/components/tasks/TaskForm";
-import { ScheduleModal } from "@/components/ai/ScheduleModal";
+import { AssistantDialog } from "@/components/threads/AssistantDialog";
+import { formatMinutes, layoutColumns, projectDay, type ColumnSlot } from "@/lib/projection";
 import { PlanningModal } from "@/components/tasks/PlanningModal";
 import { ShutdownModal } from "@/components/tasks/ShutdownModal";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -153,12 +154,15 @@ function ResizableTaskBlock({
   task,
   top,
   height,
+  slot,
   onResize,
   children,
 }: {
   task: Task;
   top: number;
   height: number;
+  /** Column within a group of overlapping tasks (parallel time). */
+  slot?: ColumnSlot;
   onResize: (newDuration: number) => void;
   children: React.ReactNode;
 }) {
@@ -193,11 +197,19 @@ function ResizableTaskBlock({
   }
 
   const displayHeight = liveHeight ?? height;
+  const { column, totalColumns } = slot ?? { column: 0, totalColumns: 1 };
 
   return (
     <div
-      className="absolute left-14 right-4"
-      style={{ top: `${top}px`, height: `${Math.max(displayHeight, 36)}px`, zIndex: 10 }}
+      className="absolute"
+      style={{
+        top: `${top}px`,
+        height: `${Math.max(displayHeight, 36)}px`,
+        // Same track as `left-14 right-4`, divided into columns for overlapping tasks.
+        left: `calc(3.5rem + (100% - 4.5rem) * ${column / totalColumns})`,
+        width: `calc((100% - 4.5rem) / ${totalColumns} - ${totalColumns > 1 ? 3 : 0}px)`,
+        zIndex: 10,
+      }}
     >
       {children}
       {/* Resize handle */}
@@ -217,7 +229,8 @@ export default function TodayPage() {
   const [date, setDate] = useState(new Date());
   const [tasks, setTasks] = useState<Task[]>([]);
   const [inboxTasks, setInboxTasks] = useState<Task[]>([]);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [intent, setIntent] = useState<string | null>(null);
   const [addingTask, setAddingTask] = useState(false);
   const [loading, setLoading] = useState(true);
   const [nowPx, setNowPx] = useState<number | null>(null);
@@ -271,6 +284,11 @@ export default function TodayPage() {
       if (!active) return;
       setLoading(false);
     });
+
+    fetch(`/api/plan?date=${dateStr}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (active) setIntent(d?.plan?.intent ?? null); })
+      .catch(() => {/* silent */});
 
     fetchCalendarEvents(dateStr, dateStr).then(({ events }) => {
       if (!active) return;
@@ -389,35 +407,18 @@ export default function TodayPage() {
     }
   }
 
-  async function acceptSchedule(schedule: { taskId: string; startTime: string; duration: number }[]) {
-    await Promise.all(schedule.map((s) =>
-      fetch(`/api/tasks/${s.taskId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scheduledDate: startOfDay(date).toISOString(),
-          startTime: s.startTime,
-          duration: s.duration,
-          status: "SCHEDULED",
-        }),
-      })
-    ));
-    await fetchTasks();
-    toast.success("Schedule applied");
-  }
-
   const scheduledTasks = tasks.filter((t) => t.startTime);
   const unscheduledDayTasks = tasks.filter((t) => !t.startTime);
   const allTasks = [...tasks, ...inboxTasks];
   const activeTask = activeTaskId ? allTasks.find((t) => t.id === activeTaskId) ?? null : null;
 
-  const plannedMinutes = scheduledTasks.reduce((acc, t) => acc + (t.duration ?? 30), 0);
+  // Parallel time: overlapping parallel tasks occupy one block, so the day's
+  // load is wall-clock time, not the sum of every estimate.
+  const projection = projectDay(scheduledTasks);
+  const columns = layoutColumns(scheduledTasks);
+  const plannedMinutes = projection.wallMinutes;
   const budgetMinutes = dailyBudgetHours * 60;
-  const plannedH = Math.floor(plannedMinutes / 60);
-  const plannedM = plannedMinutes % 60;
-  const plannedLabel = plannedH > 0
-    ? `${plannedH}h${plannedM > 0 ? ` ${plannedM}m` : ""}`
-    : `${plannedM}m`;
+  const plannedLabel = formatMinutes(plannedMinutes);
   const budgetPct = Math.min((plannedMinutes / budgetMinutes) * 100, 100);
   const budgetColor = plannedMinutes > budgetMinutes
     ? "text-rose-400"
@@ -463,7 +464,14 @@ export default function TodayPage() {
             </div>
             {/* Daily budget indicator */}
             {!loading && plannedMinutes > 0 && (
-              <div className="flex items-center gap-2 ml-auto mr-2">
+              <div
+                className="flex items-center gap-2 ml-auto mr-2"
+                title={
+                  projection.effortMinutes !== plannedMinutes
+                    ? `${formatMinutes(projection.effortMinutes)} of work fits in ${plannedLabel} because parallel tasks share time`
+                    : undefined
+                }
+              >
                 <div className="flex flex-col items-end gap-0.5">
                   <span className={cn("text-[11px] font-medium tabular-nums", budgetColor)}>
                     {plannedLabel} <span className="text-muted-foreground/50 font-normal">of {dailyBudgetHours}h</span>
@@ -484,20 +492,22 @@ export default function TodayPage() {
                 size="sm"
                 className="h-7 text-xs gap-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
                 onClick={() => setPlanningOpen(true)}
-                title="Start day — plan what you'll work on"
+                title="Plan the day around what matters to you"
+                data-testid="plan-my-day-btn"
               >
                 <Sunrise className="h-3.5 w-3.5" />
-                Start day
+                Plan day
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 className="h-7 text-xs gap-1.5 border-border/60 bg-transparent hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-colors"
-                onClick={() => setScheduleOpen(true)}
-                data-testid="plan-my-day-btn"
+                onClick={() => setAssistantOpen(true)}
+                title="Ask the assistant to change anything about your day"
+                data-testid="assistant-btn"
               >
-                <Wand2 className="h-3.5 w-3.5" />
-                AI schedule
+                <MessageSquare className="h-3.5 w-3.5" />
+                Assistant
               </Button>
               <Button
                 variant="ghost"
@@ -511,6 +521,19 @@ export default function TodayPage() {
               </Button>
             </div>
           </div>
+
+          {/* What matters today — kept in view so it isn't lost among the work */}
+          {intent && (
+            <button
+              className="flex items-center gap-2 px-6 py-2 border-b border-border/40 bg-amber-500/[0.06] text-left hover:bg-amber-500/10 transition-colors shrink-0"
+              onClick={() => setPlanningOpen(true)}
+              title="What you said matters today — click to re-plan"
+              data-testid="day-intent"
+            >
+              <Target className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+              <span className="text-xs text-foreground/80 truncate">{intent}</span>
+            </button>
+          )}
 
           <ScrollArea className="flex-1">
             <div
@@ -621,6 +644,7 @@ export default function TodayPage() {
                     task={task}
                     top={top}
                     height={Math.max(height, 36)}
+                    slot={columns[task.id]}
                     onResize={(newDuration) => updateTask(task.id, { duration: newDuration })}
                   >
                     <DraggableTask id={task.id}>
@@ -721,18 +745,18 @@ export default function TodayPage() {
         )}
       </DragOverlay>
 
-      <ScheduleModal
-        open={scheduleOpen}
-        onOpenChange={setScheduleOpen}
-        date={date}
-        tasks={[...tasks, ...inboxTasks]}
-        onAccept={acceptSchedule}
-      />
       <PlanningModal
         open={planningOpen}
         onOpenChange={setPlanningOpen}
         date={date}
         onDone={fetchTasks}
+        onAdjust={() => setAssistantOpen(true)}
+      />
+      <AssistantDialog
+        open={assistantOpen}
+        onOpenChange={setAssistantOpen}
+        date={date}
+        onChanged={fetchTasks}
       />
       <ShutdownModal
         open={shutdownOpen}

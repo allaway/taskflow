@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Trash2, Wand2, Clock } from "lucide-react";
+import { MoreHorizontal, Trash2, Wand2, Clock, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Task } from "@prisma/client";
 import { GeneratePromptModal } from "@/components/ai/GeneratePromptModal";
@@ -123,7 +123,7 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
           )}
 
           {/* Meta row */}
-          {(labels.length > 0 || src || (showTime && task.startTime)) && (
+          {(labels.length > 0 || src || task.parallel || (showTime && task.startTime)) && (
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               {labels.map((label: string) => (
                 <span key={label} className="text-[10px] px-1.5 py-0.5 rounded-md bg-primary/8 text-primary font-medium ring-1 ring-primary/15">
@@ -133,6 +133,15 @@ export function TaskCard({ task, onUpdate, onDelete, showTime, dragging }: TaskC
               {src && (
                 <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-md", src.cls)}>
                   {src.text}
+                </span>
+              )}
+              {task.parallel && (
+                <span
+                  className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md text-violet-600 bg-violet-500/10"
+                  title="Parallel time: runs alongside other parallel tasks"
+                >
+                  <Layers className="h-2.5 w-2.5" />
+                  parallel
                 </span>
               )}
               {showTime && task.startTime && (

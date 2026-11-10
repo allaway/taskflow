@@ -539,6 +539,28 @@ Be thorough. Write real, useful output — not a summary of what you would do.`}
               </div>
             </FieldRow>
 
+            <FieldRow
+              label="Catch-up endpoint"
+              hint="POST emails, mentions and other updates here to triage in Catch-up: { source, title, body, url, author, externalId }"
+            >
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={`${origin}/api/webhooks/catchup`}
+                  className="bg-muted/40 border-border/60 h-9 text-muted-foreground font-mono text-xs focus-visible:ring-0"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 border-border/60 bg-transparent shrink-0"
+                  onClick={() => copyToken(`${origin}/api/webhooks/catchup`)}
+                  title="Copy URL"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </FieldRow>
+
             <Separator className="opacity-50" />
 
             {/* New token revealed */}

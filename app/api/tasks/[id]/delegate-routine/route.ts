@@ -4,7 +4,9 @@
  * Fires the user's configured Claude Code Routine with the task as context.
  * The routine is expected to use the TaskFlow MCP tools to read and update the task.
  *
- * Returns: { sessionUrl } — the claude.ai session URL to open live.
+ * The session is recorded as an agent thread under the task.
+ *
+ * Returns: { sessionUrl, threadId } — the claude.ai session URL to open live.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -12,6 +14,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 import { rateLimit, getClientIp } from "@/lib/rateLimit";
+import { createAgentThread } from "@/lib/services/threads";
 
 const ROUTINE_FIRE_URL = "https://api.anthropic.com/v1/claude_code/routines";
 const ANTHROPIC_BETA = "experimental-cc-routine-2026-04-01";
@@ -58,6 +61,7 @@ export async function POST(
     priority: task.priority,
     description: task.description ?? null,
     notes: task.notes ?? null,
+    threadHint: "Report progress with post_thread_update on this task's thread (see list_threads).",
     mcpUrl: `${process.env.NEXTAUTH_URL ?? "https://taskflow-production-585d.up.railway.app"}/api/mcp`,
   });
 
@@ -96,14 +100,22 @@ export async function POST(
     claude_code_session_url: string;
   };
 
-  // Mark task as agent-queued so MCP / UI knows it's being worked on
+  // Mark task as agent-queued so MCP / UI knows it's being worked on, and keep
+  // the session as a thread under the task.
   await prisma.task.update({
     where: { id: taskId },
     data: { agentQueued: true },
+  });
+  const thread = await createAgentThread(session.user.id, {
+    taskId,
+    provider: "claude-code",
+    url: data.claude_code_session_url,
+    externalId: data.claude_code_session_id,
   });
 
   return NextResponse.json({
     sessionUrl: data.claude_code_session_url,
     sessionId: data.claude_code_session_id,
+    threadId: thread.id,
   });
 }

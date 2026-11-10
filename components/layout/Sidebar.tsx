@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { CalendarDays, Inbox, LayoutGrid, Settings, LogOut, Zap, BarChart2, Search } from "lucide-react";
+import { CalendarDays, Inbox, LayoutGrid, Settings, LogOut, Zap, BarChart2, Search, Rss } from "lucide-react";
 import { SearchModal } from "@/components/tasks/SearchModal";
 
 const navItems = [
   { href: "/today",  label: "Today",  icon: CalendarDays },
   { href: "/week",   label: "Week",   icon: LayoutGrid },
+  { href: "/catchup", label: "Catch-up", icon: Rss },
   { href: "/inbox",  label: "Inbox",  icon: Inbox },
   { href: "/review", label: "Review", icon: BarChart2 },
 ];

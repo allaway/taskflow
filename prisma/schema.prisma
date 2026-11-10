@@ -43,6 +43,9 @@ model User {
   tasks                Task[]
   apiTokens            ApiToken[]
   cachedCalendarEvents CachedCalendarEvent[]
+  dayPlans             DayPlan[]
+  threads              Thread[]
+  catchUpItems         CatchUpItem[]
 }
 
 model Task {
@@ -68,7 +71,9 @@ model Task {
   completedAt   DateTime?  // set when status → COMPLETED
   daysOverdue   Int        @default(0)  // incremented each time task slides forward
   agentQueued   Boolean    @default(false)  // task is queued for an AI agent to pick up
+  parallel      Boolean    @default(false)  // worked on alongside other tasks; overlapping parallel tasks share one block of time
 
+  threads       Thread[]
 
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -127,4 +132,101 @@ model ApiToken {
   lastUsedAt  DateTime?
 
   @@index([userId])
+}
+
+// One row per user per day: what the user said mattered, and the plan's rationale.
+model DayPlan {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String   // "YYYY-MM-DD" in the user's local calendar
+  intent    String?  // the user's prompt: "what really matters today"
+  summary   String?  // the planner's explanation of the plan it built
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+}
+
+// A conversation. ASSISTANT threads are the daily in-app assistant chat (one per
+// day). AGENT threads are delegated work that lives under a task: either run
+// in-app (provider "taskflow") or in an external tool (Claude, Codex, Gemini…)
+// that is linked by URL and reports back over MCP.
+model Thread {
+  id             String       @id @default(cuid())
+  kind           ThreadKind
+  provider       String       @default("taskflow")
+  title          String
+  url            String?      // where the thread lives, for external providers
+  externalId     String?      // provider's session/thread id
+  status         ThreadStatus @default(ACTIVE)
+  summary        String?      // latest one-line state of the work
+  date           String?      // "YYYY-MM-DD" for ASSISTANT threads
+
+  taskId         String?
+  task           Task?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  messages       ThreadMessage[]
+
+  lastActivityAt DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([userId, kind, date])
+  @@index([userId, kind, status])
+  @@index([taskId])
+}
+
+enum ThreadKind {
+  ASSISTANT
+  AGENT
+}
+
+enum ThreadStatus {
+  ACTIVE   // the agent is working
+  WAITING  // the agent is waiting on the user
+  DONE
+}
+
+model ThreadMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role      String   // "user" | "agent" | "system" (tool activity, status changes)
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+// Catch-up: things that happened elsewhere (email, Slack, agent threads…) that
+// the user triages into tasks or archives. Not a task until triaged.
+model CatchUpItem {
+  id         String        @id @default(cuid())
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source     String        // "email" | "slack" | "agent" | "calendar" | free-form
+  title      String
+  body       String?
+  url        String?
+  author     String?
+  externalId String?       // for deduplication from integrations
+  occurredAt DateTime      @default(now())
+  status     CatchUpStatus @default(NEW)
+  relevance  Int           @default(50)  // 0–100
+  reason     String?       // why it was ranked where it was
+  taskId     String?       // set when triaged into a task
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([userId, externalId])
+  @@index([userId, status, relevance])
+}
+
+enum CatchUpStatus {
+  NEW
+  TASKED
+  ARCHIVED
 }

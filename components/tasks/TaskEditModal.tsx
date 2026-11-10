@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, X, Tag, Pencil, Check, Bot } from "lucide-react";
+import { Trash2, X, Tag, Pencil, Check, Bot, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Task } from "@prisma/client";
 import ReactMarkdown from "react-markdown";
@@ -13,7 +13,8 @@ import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import { toast } from "sonner";
 import { SendToClaudeModal } from "./SendToClaudeModal";
-import { AgentRunModal } from "./AgentRunModal";
+import { TaskThreads } from "@/components/threads/TaskThreads";
+import { ThreadDialog } from "@/components/threads/ThreadDialog";
 
 interface LabelEntry { name: string; color: string; }
 
@@ -141,12 +142,14 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
   const [scheduledDate, setScheduledDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [duration, setDuration] = useState("");
+  const [parallel, setParallel] = useState(false);
   const [labels, setLabels] = useState<string[]>([]);
   const [labelInput, setLabelInput] = useState("");
   const [labelPalette, setLabelPalette] = useState<LabelEntry[]>([]);
   const [saving, setSaving] = useState(false);
   const [sendToClaudeOpen, setSendToClaudeOpen] = useState(false);
-  const [agentRunOpen, setAgentRunOpen] = useState(false);
+  const [openThread, setOpenThread] = useState<{ id: string; kickoff?: string } | null>(null);
+  const [threadOpen, setThreadOpen] = useState(false);
   const [agentQueuing, setAgentQueuing] = useState(false);
 
   useEffect(() => {
@@ -163,6 +166,7 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
       setScheduledDate(task.scheduledDate ? String(task.scheduledDate).slice(0, 10) : "");
       setStartTime(task.startTime ?? "");
       setDuration(task.duration?.toString() ?? "");
+      setParallel(task.parallel);
       try {
         const raw = (task as Task & { labels?: string }).labels;
         const parsed = raw ? JSON.parse(raw) : [];
@@ -218,6 +222,7 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
       status,
       startTime: startTime || null,
       duration: duration ? parseInt(duration) : null,
+      parallel,
     };
     if (scheduledDate) {
       updates.scheduledDate = new Date(scheduledDate).toISOString();
@@ -269,12 +274,27 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
       // network error → fall through
     }
 
-    // Fall back to server-side agentic loop
-    await onUpdate(task!.id, { agentQueued: true } as Partial<Task>);
+    // No routine configured: run the agent in-app, as a thread under this task.
+    try {
+      const res = await fetch("/api/threads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId: task!.id }),
+      });
+      if (!res.ok) throw new Error();
+      const thread = await res.json() as { id: string };
+      showThread(thread.id, "Please work on this task and show me your work.");
+    } catch {
+      toast.error("Failed to start an agent thread");
+    }
     setAgentQueuing(false);
-    onOpenChange(false);    // close task edit modal first
-    // Wait for the close animation (100ms) before opening agent modal
-    setTimeout(() => setAgentRunOpen(true), 150);
+  }
+
+  // Close this modal first, then open the thread once the close animation is done.
+  function showThread(id: string, kickoff?: string) {
+    onOpenChange(false);
+    setOpenThread({ id, kickoff });
+    setTimeout(() => setThreadOpen(true), 150);
   }
 
   return (
@@ -408,8 +428,31 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
                   </span>
                 </div>
               </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Parallel time</label>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={parallel}
+                  onClick={() => setParallel((v) => !v)}
+                  title="Worked on alongside other tasks, e.g. while an agent takes its turn. Parallel tasks that overlap share one block of your day."
+                  className={cn(
+                    "h-8 px-3 flex items-center gap-1.5 rounded-md border text-sm transition-colors",
+                    parallel
+                      ? "border-violet-500/50 bg-violet-500/10 text-violet-600"
+                      : "border-border/50 text-muted-foreground hover:text-foreground"
+                  )}
+                  data-testid="parallel-toggle"
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  {parallel ? "In parallel" : "One at a time"}
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* Agent threads */}
+          <TaskThreads taskId={task.id} onOpenThread={(id) => showThread(id)} />
 
           {/* Labels */}
           <div className="space-y-2">
@@ -504,14 +547,13 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
       </DialogContent>
     </Dialog>
 
-    {task && (
-      <AgentRunModal
-        task={task}
-        open={agentRunOpen}
-        onOpenChange={setAgentRunOpen}
-        onDone={() => onUpdate(task.id, {})}
-      />
-    )}
+    <ThreadDialog
+      threadId={openThread?.id ?? null}
+      open={threadOpen}
+      onOpenChange={setThreadOpen}
+      autoSend={openThread?.kickoff}
+      onChanged={() => onUpdate(task.id, {})}
+    />
     {task && (
       <SendToClaudeModal
         task={task}

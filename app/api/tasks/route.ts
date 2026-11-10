@@ -1,60 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/db";
 import { CreateTaskSchema } from "@/lib/validate";
 import { rateLimit, getClientIp } from "@/lib/rateLimit";
+import { errorResponse, sessionUserId, unauthorized } from "@/lib/http";
+import { createTask, listTasks } from "@/lib/services/tasks";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await sessionUserId();
+  if (!userId) return unauthorized();
 
-  const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status");
-  const date = searchParams.get("date");
-  const source = searchParams.get("source");
-  const completedDate = searchParams.get("completedDate");
-  const completedFrom = searchParams.get("completedFrom");
-  const completedTo = searchParams.get("completedTo");
-  const q = searchParams.get("q");
-
-  const where: Record<string, unknown> = { userId: session.user.id };
-  if (status) where.status = status;
-  if (date) {
-    const dayStart = new Date(date + "T00:00:00.000Z");
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-    where.scheduledDate = { gte: dayStart, lt: dayEnd };
+  const p = new URL(req.url).searchParams;
+  try {
+    const tasks = await listTasks(userId, {
+      status: p.get("status"),
+      date: p.get("date"),
+      source: p.get("source"),
+      completedDate: p.get("completedDate"),
+      completedFrom: p.get("completedFrom"),
+      completedTo: p.get("completedTo"),
+      q: p.get("q"),
+    });
+    return NextResponse.json(tasks);
+  } catch (err) {
+    return errorResponse(err);
   }
-  if (source) where.source = source;
-  if (completedDate) {
-    const dayStart = new Date(completedDate + "T00:00:00.000Z");
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-    where.completedAt = { gte: dayStart, lt: dayEnd };
-  }
-  if (completedFrom || completedTo) {
-    const range: Record<string, Date> = {};
-    if (completedFrom) range.gte = new Date(completedFrom + "T00:00:00.000Z");
-    if (completedTo) range.lt = new Date(completedTo + "T00:00:00.000Z");
-    where.completedAt = range;
-  }
-  if (q) {
-    where.OR = [
-      { title: { contains: q, mode: "insensitive" } },
-      { description: { contains: q, mode: "insensitive" } },
-      { notes: { contains: q, mode: "insensitive" } },
-    ];
-  }
-
-  const tasks = await prisma.task.findMany({
-    where,
-    orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
-  });
-
-  return NextResponse.json(tasks);
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await sessionUserId();
+  if (!userId) return unauthorized();
 
   const limited = await rateLimit(getClientIp(req), "api");
   if (limited) return limited;
@@ -65,14 +38,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const task = await prisma.task.create({
-    data: {
-      ...parsed.data,
-      userId: session.user.id,
-      scheduledDate: parsed.data.scheduledDate ? new Date(parsed.data.scheduledDate) : undefined,
-      status: parsed.data.scheduledDate ? "SCHEDULED" : "INBOX",
-    },
-  });
-
-  return NextResponse.json(task, { status: 201 });
+  try {
+    const task = await createTask(userId, parsed.data);
+    return NextResponse.json(task, { status: 201 });
+  } catch (err) {
+    return errorResponse(err);
+  }
 }

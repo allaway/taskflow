@@ -37,12 +37,16 @@ export async function callAi(config: AiProviderConfig, prompt: string): Promise<
     const client = new Anthropic({ apiKey: config.apiKey });
     const message = await client.messages.create({
       model: config.model,
-      max_tokens: 4096,
+      max_tokens: 16000,
       messages: [{ role: "user", content: prompt }],
     });
-    const block = message.content[0];
-    if (block.type !== "text") throw new Error("Unexpected response type from Anthropic");
-    return block.text;
+    // Models that think return thinking blocks first — take the text, wherever it is.
+    const text = message.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("");
+    if (!text) throw new Error("Unexpected response type from Anthropic");
+    return text;
   }
 
   if (config.provider === "openrouter") {
@@ -63,50 +67,6 @@ export async function callAi(config: AiProviderConfig, prompt: string): Promise<
   }
 
   throw new Error(`Unknown AI provider: ${config.provider}`);
-}
-
-/**
- * Builds the AI scheduling prompt from tasks, time constraints, and blocked slots.
- */
-export function buildSchedulePrompt(
-  tasks: Pick<Task, "id" | "title" | "description" | "priority" | "duration">[],
-  date: string,
-  workStartTime: string,
-  workEndTime: string,
-  blockedSlots: { start: string; end: string; label: string }[] = []
-): string {
-  const taskList = tasks
-    .map(
-      (t, i) =>
-        `${i + 1}. [${t.id}] "${t.title}" — priority: ${t.priority}, duration: ${t.duration ?? 30} min${t.description ? `, context: ${t.description}` : ""}`
-    )
-    .join("\n");
-
-  const blockedSection = blockedSlots.length > 0
-    ? `\nBlocked time slots (do NOT schedule any task during these — treat them as immovable):\n${
-        blockedSlots.map((s) => `- ${s.start}–${s.end}: "${s.label}"`).join("\n")
-      }\n`
-    : "";
-
-  return `You are a productivity assistant helping schedule tasks for ${date}.
-
-Working hours: ${workStartTime} to ${workEndTime}
-${blockedSection}
-Tasks to schedule:
-${taskList}
-
-Rules:
-- Schedule ALL tasks within working hours (${workStartTime}–${workEndTime})
-- Never schedule a task that overlaps with a blocked slot — find the open gaps between them
-- Higher priority tasks should be scheduled earlier in the day when possible
-- Leave a 10-minute buffer between consecutive tasks and between tasks and blocked slots
-- Use the provided duration for each task (default 30 min if not specified)
-- If tasks don't all fit today, omit lower-priority ones rather than violating the above rules
-
-Output ONLY the raw JSON array below — no markdown, no code fences, no explanation, nothing else:
-[
-  { "taskId": "cuid_here", "startTime": "HH:MM", "duration": 30 }
-]`;
 }
 
 /**
