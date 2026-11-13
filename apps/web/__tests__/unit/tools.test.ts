@@ -121,3 +121,12 @@ describe("Claude chat handoff", () => {
     expect(claudeAppUrl("a b")).toBe("claude://claude.ai/new?q=a%20b");
   });
 });
+
+describe("catch-up items from agent threads", () => {
+  it("recovers the thread id from the item's external id", async () => {
+    const { threadIdFromCatchUp } = await import("@/lib/services/catchup");
+    expect(threadIdFromCatchUp("thread-cmabc123xyz-cmmsg456")).toBe("cmabc123xyz");
+    expect(threadIdFromCatchUp("gmail-18c2f")).toBeNull();
+    expect(threadIdFromCatchUp(null)).toBeNull();
+  });
+});

@@ -150,7 +150,7 @@ export const CatchUpWebhookSchema = z.union([
 ]);
 
 export const CatchUpTriageSchema = z.object({
-  action: z.enum(["task", "archive", "restore"]),
+  action: z.enum(["task", "archive", "restore", "complete"]),
 });
 
 export const AiPromptSchema = z.object({

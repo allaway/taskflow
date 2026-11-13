@@ -25,7 +25,7 @@ export async function listThreads(
       ...(filter.taskId ? { taskId: filter.taskId } : {}),
       ...(filter.status ? { status: filter.status } : {}),
     },
-    include: { task: { select: { id: true, title: true } }, _count: { select: { messages: true } } },
+    include: { task: { select: { id: true, title: true, status: true } }, _count: { select: { messages: true } } },
     orderBy: { lastActivityAt: "desc" },
     take: 100,
   });

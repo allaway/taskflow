@@ -3,12 +3,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Archive, ExternalLink, ListPlus, Loader2, Rss, Sparkles } from "lucide-react";
+import { Archive, CheckCircle2, ExternalLink, ListPlus, Loader2, MessageSquare, Rss, Sparkles, SquarePen } from "lucide-react";
 import { toast } from "sonner";
-import type { CatchUpItem } from "@prisma/client";
+import type { CatchUpItem as CatchUpRow, Task } from "@prisma/client";
+import type { CatchUpRelated } from "@/lib/services/catchup";
+import { TaskEditModal } from "@/components/tasks/TaskEditModal";
+import { ThreadDialog } from "@/components/threads/ThreadDialog";
+import { providerLabel } from "@/components/threads/threadMeta";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { untrustedMarkdown } from "@/lib/safeMarkdown";
+
+type CatchUpItem = CatchUpRow & { related: CatchUpRelated | null };
+type Action = "task" | "archive" | "complete";
 
 const SOURCE_STYLE: Record<string, string> = {
   agent: "text-violet-600 bg-violet-500/10",
@@ -33,6 +40,10 @@ export default function CatchUpPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const [reviewTask, setReviewTask] = useState<Task | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [replyThreadId, setReplyThreadId] = useState<string | null>(null);
+  const [replyOpen, setReplyOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -58,7 +69,7 @@ export default function CatchUpPage() {
   const selectedUrl = selected?.url && /^https?:\/\//i.test(selected.url) ? selected.url : null;
 
   const triage = useCallback(
-    async (item: CatchUpItem, action: "task" | "archive") => {
+    async (item: CatchUpItem, action: Action) => {
       // Optimistic: drop it and move the selection to the next item.
       setItems((prev) => {
         const idx = prev.findIndex((i) => i.id === item.id);
@@ -77,10 +88,19 @@ export default function CatchUpPage() {
         return;
       }
       const data = (await res.json().catch(() => null)) as { task?: { id: string } } | null;
-      toast.success(action === "task" ? "Added to your task inbox" : "Archived", {
+      const done = { task: "Added to your task inbox", archive: "Archived", complete: "Task completed" }[action];
+      toast.success(done, {
         action: {
           label: "Undo",
           onClick: async () => {
+            if (action === "complete" && item.related?.taskId) {
+              // Reopen the task as it was before.
+              await fetch(`/api/tasks/${item.related.taskId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: item.related.taskStatus ?? "INBOX" }),
+              });
+            }
             if (action === "task" && data?.task?.id) await fetch(`/api/tasks/${data.task.id}`, { method: "DELETE" });
             await fetch(`/api/catchup/${item.id}`, {
               method: "PATCH",
@@ -95,6 +115,42 @@ export default function CatchUpPage() {
     []
   );
 
+  // What the item is about. An agent update points at the task the agent worked on.
+  const related = selected?.related ?? null;
+  const taskOpen = !!related?.taskId && related.taskStatus !== "COMPLETED" && related.taskStatus !== "CANCELLED";
+  const needsReply = related?.threadStatus === "WAITING";
+
+  async function openTask(taskId: string) {
+    const res = await fetch(`/api/tasks/${taskId}`);
+    if (!res.ok) {
+      toast.error("Couldn't load that task");
+      return;
+    }
+    setReviewTask(await res.json());
+    setReviewOpen(true);
+  }
+
+  function openReply(threadId: string) {
+    setReplyThreadId(threadId);
+    setReplyOpen(true);
+  }
+
+  async function saveTask(id: string, updates: Partial<Task>) {
+    const res = await fetch(`/api/tasks/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) toast.error("Failed to update task");
+    setRefresh((r) => r + 1);
+  }
+
+  async function removeTask(id: string) {
+    const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+    if (!res.ok) toast.error("Failed to delete task");
+    setRefresh((r) => r + 1);
+  }
+
   async function rank() {
     setRanking(true);
     const res = await fetch("/api/catchup/rank", { method: "POST" });
@@ -108,7 +164,7 @@ export default function CatchUpPage() {
     setRefresh((r) => r + 1);
   }
 
-  // Keyboard triage: j/k move, t → task, e → archive, o → open the source.
+  // Keyboard triage: j/k move, c → complete the task, r → reply, t → new task, e → archive, o → open the source.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
@@ -122,6 +178,12 @@ export default function CatchUpPage() {
       } else if (key === "k" || e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedId(items[Math.max(selectedIndex - 1, 0)].id);
+      } else if (key === "c" && selected && taskOpen) {
+        e.preventDefault();
+        triage(selected, "complete");
+      } else if (key === "r" && related) {
+        e.preventDefault();
+        openReply(related.threadId);
       } else if (key === "t" && selected) {
         e.preventDefault();
         triage(selected, "task");
@@ -135,7 +197,7 @@ export default function CatchUpPage() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [items, selected, selectedUrl, selectedIndex, triage]);
+  }, [items, selected, selectedUrl, selectedIndex, triage, related, taskOpen]);
 
   useEffect(() => {
     listRef.current?.querySelector('[data-selected="true"]')?.scrollIntoView({ block: "nearest" });
@@ -154,7 +216,7 @@ export default function CatchUpPage() {
         </div>
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-            <Kbd>j</Kbd><Kbd>k</Kbd> move <Kbd>t</Kbd> task <Kbd>e</Kbd> archive <Kbd>o</Kbd> open
+            <Kbd>j</Kbd><Kbd>k</Kbd> move <Kbd>c</Kbd> complete <Kbd>r</Kbd> reply <Kbd>t</Kbd> new task <Kbd>e</Kbd> archive <Kbd>o</Kbd> open
           </div>
           <Button
             variant="outline"
@@ -248,13 +310,72 @@ export default function CatchUpPage() {
                     <p className="text-muted-foreground/50">No preview available.</p>
                   )}
                 </div>
+                {related?.taskId && (
+                  <div className="flex items-center gap-2 px-6 py-2.5 border-t border-border/40 bg-muted/30 text-xs shrink-0">
+                    <span className="text-muted-foreground shrink-0">For task</span>
+                    <button
+                      className="font-medium truncate hover:underline text-left"
+                      onClick={() => openTask(related.taskId!)}
+                      title="Open the task"
+                    >
+                      {related.taskTitle}
+                    </button>
+                    <span className="ml-auto text-muted-foreground shrink-0">
+                      {taskOpen ? "still open" : related.taskStatus === "COMPLETED" ? "already completed" : "cancelled"}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 px-6 py-3 border-t border-border/40 shrink-0">
-                  <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => triage(selected, "task")}>
-                    <ListPlus className="h-3.5 w-3.5" /> Make it a task
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-border/60 bg-transparent" onClick={() => triage(selected, "archive")}>
-                    <Archive className="h-3.5 w-3.5" /> Archive
-                  </Button>
+                  {related ? (
+                    <>
+                      {/* Agent update: act on the work it reports, not on the notification. */}
+                      {needsReply ? (
+                        <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => openReply(related.threadId)}>
+                          <MessageSquare className="h-3.5 w-3.5" /> Reply to agent
+                        </Button>
+                      ) : taskOpen ? (
+                        <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => triage(selected, "complete")} data-testid="catchup-complete">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Complete task
+                        </Button>
+                      ) : (
+                        <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => triage(selected, "archive")}>
+                          <Archive className="h-3.5 w-3.5" /> Got it
+                        </Button>
+                      )}
+                      {related.taskId && (
+                        <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-border/60 bg-transparent" onClick={() => openTask(related.taskId!)}>
+                          <SquarePen className="h-3.5 w-3.5" /> Review task
+                        </Button>
+                      )}
+                      {needsReply && taskOpen && (
+                        <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-border/60 bg-transparent" onClick={() => triage(selected, "complete")}>
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Complete task
+                        </Button>
+                      )}
+                      {!needsReply && (
+                        <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5 text-muted-foreground" onClick={() => openReply(related.threadId)}>
+                          <MessageSquare className="h-3.5 w-3.5" /> Reply
+                        </Button>
+                      )}
+                      {(needsReply || taskOpen) && (
+                        <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5 text-muted-foreground" onClick={() => triage(selected, "archive")} title="Dismiss this update and leave the task as it is">
+                          <Archive className="h-3.5 w-3.5" /> Dismiss
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5 text-muted-foreground" onClick={() => triage(selected, "task")} title="Create a separate follow-up task from this update">
+                        <ListPlus className="h-3.5 w-3.5" /> Follow-up task
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => triage(selected, "task")}>
+                        <ListPlus className="h-3.5 w-3.5" /> Make it a task
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-border/60 bg-transparent" onClick={() => triage(selected, "archive")}>
+                        <Archive className="h-3.5 w-3.5" /> Archive
+                      </Button>
+                    </>
+                  )}
                   {selectedUrl && (
                     <a
                       href={selectedUrl}
@@ -262,7 +383,7 @@ export default function CatchUpPage() {
                       rel="noopener noreferrer"
                       className="ml-auto inline-flex items-center gap-1 text-xs text-primary hover:underline"
                     >
-                      Open in {selected.source} <ExternalLink className="h-3 w-3" />
+                      Open in {selected.source === "agent" ? providerLabel(selected.author ?? "other") : selected.source} <ExternalLink className="h-3 w-3" />
                     </a>
                   )}
                 </div>
@@ -271,6 +392,20 @@ export default function CatchUpPage() {
           </div>
         </div>
       )}
+
+      <TaskEditModal
+        task={reviewTask}
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        onUpdate={saveTask}
+        onDelete={removeTask}
+      />
+      <ThreadDialog
+        threadId={replyThreadId}
+        open={replyOpen}
+        onOpenChange={setReplyOpen}
+        onChanged={() => setRefresh((r) => r + 1)}
+      />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sessionUserId, unauthorized } from "@/lib/http";
-import { listCatchUp } from "@/lib/services/catchup";
+import { listCatchUp, relatedWork } from "@/lib/services/catchup";
 
 export async function GET(req: NextRequest) {
   const userId = await sessionUserId();
@@ -19,5 +19,10 @@ export async function GET(req: NextRequest) {
       select: { date: true },
     }),
   ]);
-  return NextResponse.json({ items, lastWorkDay: lastPlan?.date ?? null });
+  // Agent updates carry the task they were for, so it can be resolved from here.
+  const related = await relatedWork(userId, items);
+  return NextResponse.json({
+    items: items.map((item) => ({ ...item, related: related[item.id] ?? null })),
+    lastWorkDay: lastPlan?.date ?? null,
+  });
 }

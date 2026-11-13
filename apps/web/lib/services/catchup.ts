@@ -8,7 +8,7 @@ import { prisma } from "@/lib/db";
 import type { CatchUpItem, Task } from "@prisma/client";
 import { callAi, resolveAiConfig } from "@/lib/ai";
 import { extractKeywords, scoreItem } from "@/lib/relevance";
-import { ServiceError } from "@/lib/services/tasks";
+import { ServiceError, updateTask } from "@/lib/services/tasks";
 
 export interface CatchUpInput {
   source: string;
@@ -75,6 +75,50 @@ export async function ingestCatchUp(userId: string, inputs: CatchUpInput[]): Pro
   return out;
 }
 
+/** Agent updates are filed under `thread-<threadId>-<messageId>` (see postAgentUpdate). */
+export function threadIdFromCatchUp(externalId: string | null): string | null {
+  return externalId?.match(/^thread-([a-z0-9]+)-/i)?.[1] ?? null;
+}
+
+export interface CatchUpRelated {
+  threadId: string;
+  threadStatus: string;
+  taskId: string | null;
+  taskTitle: string | null;
+  taskStatus: string | null;
+}
+
+/** For items that came from an agent thread: the thread and the task the work was for. */
+export async function relatedWork(
+  userId: string,
+  items: Pick<CatchUpItem, "id" | "externalId">[]
+): Promise<Record<string, CatchUpRelated>> {
+  const threadIds = new Map<string, string>();
+  for (const item of items) {
+    const threadId = threadIdFromCatchUp(item.externalId);
+    if (threadId) threadIds.set(item.id, threadId);
+  }
+  if (threadIds.size === 0) return {};
+  const threads = await prisma.thread.findMany({
+    where: { userId, id: { in: [...new Set(threadIds.values())] } },
+    select: { id: true, status: true, task: { select: { id: true, title: true, status: true } } },
+  });
+  const byId = new Map(threads.map((t) => [t.id, t]));
+  const out: Record<string, CatchUpRelated> = {};
+  for (const [itemId, threadId] of threadIds) {
+    const t = byId.get(threadId);
+    if (!t) continue;
+    out[itemId] = {
+      threadId,
+      threadStatus: t.status,
+      taskId: t.task?.id ?? null,
+      taskTitle: t.task?.title ?? null,
+      taskStatus: t.task?.status ?? null,
+    };
+  }
+  return out;
+}
+
 export async function listCatchUp(userId: string, status: CatchUpItem["status"] = "NEW") {
   return prisma.catchUpItem.findMany({
     where: { userId, status },
@@ -83,7 +127,7 @@ export async function listCatchUp(userId: string, status: CatchUpItem["status"] 
   });
 }
 
-export type TriageAction = "task" | "archive" | "restore";
+export type TriageAction = "task" | "archive" | "restore" | "complete";
 
 export async function triageCatchUp(
   userId: string,
@@ -95,6 +139,14 @@ export async function triageCatchUp(
 
   if (action === "archive") {
     return { item: await prisma.catchUpItem.update({ where: { id }, data: { status: "ARCHIVED" } }) };
+  }
+  if (action === "complete") {
+    // The item reports on delegated work: resolve the task that work was for.
+    const related = (await relatedWork(userId, [item]))[item.id];
+    if (!related?.taskId) throw new ServiceError("This item isn't linked to a task");
+    const task = await updateTask(userId, related.taskId, { status: "COMPLETED" });
+    await prisma.thread.updateMany({ where: { id: related.threadId, userId }, data: { status: "DONE" } });
+    return { item: await prisma.catchUpItem.update({ where: { id }, data: { status: "ARCHIVED" } }), task };
   }
   if (action === "restore") {
     return { item: await prisma.catchUpItem.update({ where: { id }, data: { status: "NEW" } }) };

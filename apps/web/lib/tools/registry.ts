@@ -290,8 +290,8 @@ export const TOOLS: Tool[] = [
   ),
   defineTool(
     "triage_catchup_item",
-    'Triage a catch-up item: "task" turns it into an inbox task, "archive" dismisses it, "restore" brings it back.',
-    z.object({ id, action: z.enum(["task", "archive", "restore"]) }),
+    'Triage a catch-up item: "complete" marks the task an agent update belongs to as done and dismisses the item, "task" turns the item into a new inbox task, "archive" dismisses it, "restore" brings it back.',
+    z.object({ id, action: z.enum(["task", "archive", "restore", "complete"]) }),
     (ctx, args) => triageCatchUp(ctx.userId, args.id, args.action)
   ),
 ];
