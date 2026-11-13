@@ -5,13 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, X, Tag, Pencil, Check, Bot, Layers } from "lucide-react";
+import { Trash2, X, Tag, Pencil, Check, Bot, Layers, MessageSquare, AppWindow, Terminal, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Task } from "@prisma/client";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import { toast } from "sonner";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { buildClaudeHandoffPrompt, claudeWebUrl, openInClaudeApp } from "@/lib/claudeHandoff";
 import { SendToClaudeModal } from "./SendToClaudeModal";
 import { TaskThreads } from "@/components/threads/TaskThreads";
 import { ThreadDialog } from "@/components/threads/ThreadDialog";
@@ -105,10 +107,8 @@ function MarkdownField({
           className="resize-none text-sm bg-transparent border-border/50 focus-visible:ring-0 focus-visible:border-primary/60 font-mono"
         />
       ) : hasContent ? (
-        <div
-          className="min-h-[2rem] cursor-text text-muted-foreground/90 hover:text-foreground transition-colors"
-          onClick={() => setEditing(true)}
-        >
+        // Read-only until "Edit" is clicked, so the text can be selected and copied.
+        <div className="min-h-[2rem] select-text text-muted-foreground/90">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
             {value}
           </ReactMarkdown>
@@ -242,15 +242,49 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
     onOpenChange(false);
   }
 
-  async function handleDelegateToAgent() {
-    setAgentQueuing(true);
+  // Hand the task to Claude chat, in the browser or the desktop app. The chat
+  // opens with a prefilled prompt; Claude reports back on a thread under this
+  // task through the TaskFlow connector.
+  function delegateToClaudeChat(target: "web" | "app") {
+    const prompt = buildClaudeHandoffPrompt(task!);
+    const openWeb = () => {
+      const opened = window.open(claudeWebUrl(prompt), "_blank", "noopener,noreferrer");
+      if (!opened) {
+        toast.info("Popup blocked — open Claude manually", {
+          action: { label: "Open", onClick: () => window.open(claudeWebUrl(prompt), "_blank", "noopener,noreferrer") },
+          duration: 10000,
+        });
+      }
+    };
+    // Open first, while we still have the click's permission to open windows.
+    if (target === "app") {
+      openInClaudeApp(prompt, () => {
+        toast.info("Claude desktop app didn't open — using claude.ai instead");
+        openWeb();
+      });
+    } else {
+      openWeb();
+    }
+    fetch("/api/threads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId: task!.id, provider: "claude" }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error();
+        toast.success("Handed to Claude — progress will show under Agent threads");
+        onUpdate(task!.id, {});
+      })
+      .catch(() => toast.error("Opened Claude, but couldn't record the thread on this task"));
+    onOpenChange(false);
+  }
 
-    // Try Claude Code Routine first
+  async function delegateToRoutine() {
+    setAgentQueuing(true);
     try {
       const res = await fetch(`/api/tasks/${task!.id}/delegate-routine`, { method: "POST" });
       if (res.ok) {
         const data = await res.json() as { sessionUrl: string };
-        setAgentQueuing(false);
         onOpenChange(false);
         const opened = window.open(data.sessionUrl, "_blank", "noopener,noreferrer");
         if (!opened) {
@@ -261,20 +295,21 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
         } else {
           toast.success("Agent session opened in new tab");
         }
-        return;
-      }
-      // 422 = no routine configured → fall through to server-side agent
-      if (res.status !== 422) {
+      } else if (res.status === 422) {
+        toast.error("No Claude Code Routine is set up — add one in Settings");
+      } else {
         const err = await res.json().catch(() => ({ error: "Unknown error" })) as { error: string };
         toast.error(err.error ?? "Failed to delegate task");
-        setAgentQueuing(false);
-        return;
       }
     } catch {
-      // network error → fall through
+      toast.error("Failed to reach the server");
     }
+    setAgentQueuing(false);
+  }
 
-    // No routine configured: run the agent in-app, as a thread under this task.
+  // Run the agent in-app, as a thread under this task.
+  async function delegateInApp() {
+    setAgentQueuing(true);
     try {
       const res = await fetch("/api/threads", {
         method: "POST",
@@ -523,17 +558,42 @@ export function TaskEditModal({ task, open, onOpenChange, onUpdate, onDelete }: 
               <Trash2 className="h-3.5 w-3.5 mr-1.5" />
               Delete
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={handleDelegateToAgent}
-              disabled={agentQueuing}
-              title="Delegate this task to an AI agent"
-            >
-              <Bot className="h-3.5 w-3.5 mr-1.5" />
-              {agentQueuing ? "Starting…" : "Delegate to AI"}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    disabled={agentQueuing}
+                    title="Delegate this task to an AI agent"
+                    data-testid="delegate-btn"
+                  />
+                }
+              >
+                <Bot className="h-3.5 w-3.5 mr-1.5" />
+                {agentQueuing ? "Starting…" : "Delegate to AI"}
+                <ChevronDown className="h-3 w-3 ml-1 opacity-60" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-60">
+                <DropdownMenuItem onClick={() => delegateToClaudeChat("web")}>
+                  <MessageSquare className="h-3.5 w-3.5 mr-2 opacity-60" />
+                  Claude chat (claude.ai)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => delegateToClaudeChat("app")}>
+                  <AppWindow className="h-3.5 w-3.5 mr-2 opacity-60" />
+                  Claude desktop app
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={delegateToRoutine}>
+                  <Terminal className="h-3.5 w-3.5 mr-2 opacity-60" />
+                  Claude Code routine
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={delegateInApp}>
+                  <Bot className="h-3.5 w-3.5 mr-2 opacity-60" />
+                  TaskFlow agent (here)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>

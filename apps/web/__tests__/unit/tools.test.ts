@@ -103,3 +103,21 @@ describe("catch-up relevance", () => {
     expect(prompt).toContain("Finish report");
   });
 });
+
+describe("Claude chat handoff", () => {
+  it("builds a short prompt that points Claude at the connector and the task", async () => {
+    const { buildClaudeHandoffPrompt, claudeWebUrl, claudeAppUrl } = await import("@/lib/claudeHandoff");
+    const prompt = buildClaudeHandoffPrompt({
+      id: "task123", title: "Draft Q4 report", priority: "HIGH",
+      description: "x".repeat(5000), notes: null,
+    });
+    expect(prompt).toContain("**Draft Q4 report** (priority: HIGH)");
+    expect(prompt).toContain("Task ID: task123");
+    expect(prompt).toContain("post_thread_update");
+    expect(prompt).toContain("truncated");
+    expect(prompt).not.toContain("Notes:");
+    expect(prompt.length).toBeLessThan(2500);
+    expect(claudeWebUrl("a b&c")).toBe("https://claude.ai/new?q=a%20b%26c");
+    expect(claudeAppUrl("a b")).toBe("claude://claude.ai/new?q=a%20b");
+  });
+});
