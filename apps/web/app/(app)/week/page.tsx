@@ -11,6 +11,8 @@ import { TaskEditModal } from "@/components/tasks/TaskEditModal";
 import type { CalendarEvent } from "@/app/api/calendar/events/route";
 import { fetchCalendarEvents } from "@/lib/calendarClient";
 import { CalendarEventPopover } from "@/components/calendar/CalendarEventPopover";
+import { TaskCard } from "@/components/tasks/TaskCard";
+import { ViewToggle, useViewMode } from "@/components/layout/ViewToggle";
 import {
   DndContext,
   PointerSensor,
@@ -66,6 +68,7 @@ export default function WeekPage() {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [selectedCalEvent, setSelectedCalEvent] = useState<CalendarEvent | null>(null);
   const [calEventAnchor, setCalEventAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [viewMode, setViewMode] = useViewMode("week");
   const closeCalEvent = useCallback(() => { setSelectedCalEvent(null); setCalEventAnchor(null); }, []);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -175,10 +178,62 @@ export default function WeekPage() {
             This week
           </Button>
         )}
+        <div className="ml-auto">
+          <ViewToggle mode={viewMode} onChange={setViewMode} />
+        </div>
       </div>
 
       {/* Grid */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      {viewMode === "list" ? (
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-2xl mx-auto p-6 space-y-2" data-testid="week-list">
+          {days.map((day) => {
+            const dateStr = format(day, "yyyy-MM-dd");
+            const dayTasks = [...(tasksByDate[dateStr] ?? [])].sort((a, b) => {
+              const done = Number(a.status === "COMPLETED") - Number(b.status === "COMPLETED");
+              if (done !== 0) return done;
+              // Timed tasks first, in time order; untimed keep their priority order.
+              if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
+              return Number(!a.startTime) - Number(!b.startTime);
+            });
+            const completed = dayTasks.filter((t) => t.status === "COMPLETED").length;
+            const today = isToday(day);
+            return (
+              <DroppableDay key={dateStr} dateStr={dateStr} className="rounded-xl px-2 py-2 transition-colors">
+                <div className="flex items-baseline gap-2 px-1 pb-1.5">
+                  <Link href={`/today?date=${dateStr}`} className="flex items-baseline gap-2 hover:underline">
+                    <h2 className={cn("text-sm font-semibold", today && "text-primary")}>{format(day, "EEEE")}</h2>
+                    <span className="text-xs text-muted-foreground">{format(day, "MMM d")}</span>
+                  </Link>
+                  {today && (
+                    <span className="text-[10px] font-medium text-primary bg-primary/15 px-1.5 py-0.5 rounded-full">today</span>
+                  )}
+                  {dayTasks.length > 0 && (
+                    <span className="ml-auto text-[11px] text-muted-foreground/60 tabular-nums">
+                      {completed}/{dayTasks.length} done
+                    </span>
+                  )}
+                </div>
+                {loading ? (
+                  <div className="h-10 rounded-lg bg-muted/40 animate-pulse" />
+                ) : dayTasks.length === 0 ? (
+                  <p className="text-xs text-muted-foreground/40 px-1 py-2">No tasks</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {dayTasks.map((task) => (
+                      <DraggableWeekTask key={task.id} id={task.id}>
+                        <TaskCard task={task} onUpdate={updateTask} onDelete={deleteTask} showTime />
+                      </DraggableWeekTask>
+                    ))}
+                  </div>
+                )}
+              </DroppableDay>
+            );
+          })}
+        </div>
+      </div>
+      ) : (
       <div className="flex-1 overflow-auto">
         <div className="grid grid-cols-7 h-full min-h-0 divide-x divide-border/40">
           {days.map((day) => {
@@ -278,6 +333,7 @@ export default function WeekPage() {
           })}
         </div>
       </div>
+      )}
 
       {/* Drag overlay */}
       <DragOverlay dropAnimation={null}>

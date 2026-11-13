@@ -29,6 +29,7 @@ import type { Task } from "@prisma/client";
 import type { CalendarEvent } from "@/app/api/calendar/events/route";
 import { fetchCalendarEvents } from "@/lib/calendarClient";
 import { CalendarEventPopover } from "@/components/calendar/CalendarEventPopover";
+import { ViewToggle, useViewMode } from "@/components/layout/ViewToggle";
 
 const HOUR_HEIGHT = 60;
 const START_HOUR = 6;
@@ -149,6 +150,19 @@ function DroppableInbox({
   );
 }
 
+// ─── Droppable day list (list view) ───────────────────────────────────────────
+function DroppableDayList({ children }: { children: React.ReactNode }) {
+  const { isOver, setNodeRef } = useDroppable({ id: "day" });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn("min-h-full transition-colors", isOver && "bg-primary/[0.04] ring-1 ring-inset ring-primary/25")}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ─── Resizable task block ─────────────────────────────────────────────────────
 function ResizableTaskBlock({
   task,
@@ -230,6 +244,7 @@ export default function TodayPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [inboxTasks, setInboxTasks] = useState<Task[]>([]);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [viewMode, setViewMode] = useViewMode("today");
   const [intent, setIntent] = useState<string | null>(null);
   const [addingTask, setAddingTask] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -392,6 +407,14 @@ export default function TodayPage() {
         status: "INBOX",
       });
       toast.success("Moved to inbox");
+    } else if (over.id === "day") {
+      // List view: put it on this day without a time
+      if (tasks.some((t) => t.id === taskId)) return;
+      await updateTask(taskId, {
+        scheduledDate: startOfDay(date).toISOString() as unknown as Date,
+        status: "SCHEDULED",
+      });
+      toast.success(`Added to ${todayView ? "today" : format(date, "EEEE")}`);
     } else {
       // Schedule to a time slot
       const slotMins = over.id as number;
@@ -410,6 +433,14 @@ export default function TodayPage() {
   const scheduledTasks = tasks.filter((t) => t.startTime);
   const unscheduledDayTasks = tasks.filter((t) => !t.startTime);
   const allTasks = [...tasks, ...inboxTasks];
+  const listView = viewMode === "list";
+  const byTime = (a: Task, b: Task) => (a.startTime ?? "").localeCompare(b.startTime ?? "");
+  const isOpen = (t: Task) => t.status !== "COMPLETED" && t.status !== "CANCELLED";
+  const listSections = [
+    { label: "Scheduled", tasks: scheduledTasks.filter(isOpen).sort(byTime) },
+    { label: "Any time", tasks: unscheduledDayTasks.filter(isOpen) },
+    { label: "Done", tasks: tasks.filter((t) => t.status === "COMPLETED") },
+  ].filter((section) => section.tasks.length > 0);
   const activeTask = activeTaskId ? allTasks.find((t) => t.id === activeTaskId) ?? null : null;
 
   // Parallel time: overlapping parallel tasks occupy one block, so the day's
@@ -487,6 +518,7 @@ export default function TodayPage() {
             )}
 
             <div className="flex items-center gap-1.5">
+              <ViewToggle mode={viewMode} onChange={setViewMode} />
               <Button
                 variant="ghost"
                 size="sm"
@@ -535,6 +567,37 @@ export default function TodayPage() {
             </button>
           )}
 
+          {listView ? (
+            <ScrollArea className="flex-1">
+              <DroppableDayList>
+                <div className="max-w-2xl mx-auto p-6 space-y-5" data-testid="today-list">
+                  {loading ? (
+                    <div className="space-y-1.5">
+                      {[1, 2, 3].map((i) => <div key={i} className="h-14 rounded-lg bg-muted/60 animate-pulse" />)}
+                    </div>
+                  ) : listSections.length === 0 ? (
+                    <div className="py-16 text-center space-y-1">
+                      <p className="text-sm font-medium text-muted-foreground">Nothing planned for this day</p>
+                      <p className="text-xs text-muted-foreground/60">Drag a task here from the inbox, or use Plan day.</p>
+                    </div>
+                  ) : (
+                    listSections.map((section) => (
+                      <div key={section.label} className="space-y-1.5">
+                        <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wide px-1">
+                          {section.label} · {section.tasks.length}
+                        </p>
+                        {section.tasks.map((task) => (
+                          <DraggableTask key={task.id} id={task.id}>
+                            <TaskCard task={task} onUpdate={updateTask} onDelete={deleteTask} showTime />
+                          </DraggableTask>
+                        ))}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </DroppableDayList>
+            </ScrollArea>
+          ) : (
           <ScrollArea className="flex-1">
             <div
               ref={timelineRef}
@@ -655,6 +718,7 @@ export default function TodayPage() {
               })}
             </div>
           </ScrollArea>
+          )}
         </div>
 
         {/* ── Inbox panel ──────────────────────────────────────────────────── */}
@@ -687,7 +751,7 @@ export default function TodayPage() {
                 <TaskForm onSubmit={addTask} onCancel={() => setAddingTask(false)} defaultDate={dateStr} />
               )}
               {/* Planned-but-untimed tasks for the selected day */}
-              {!loading && unscheduledDayTasks.length > 0 && (
+              {!loading && !listView && unscheduledDayTasks.length > 0 && (
                 <>
                   <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wide px-1 pt-1">
                     {todayView ? "Today" : format(date, "EEE, MMM d")} — drag to schedule
@@ -707,13 +771,13 @@ export default function TodayPage() {
               )}
               {loading ? (
                 [1, 2, 3].map((i) => <div key={i} className="h-12 rounded-lg bg-muted/60 animate-pulse" />)
-              ) : inboxTasks.length === 0 && !addingTask && unscheduledDayTasks.length === 0 ? (
+              ) : inboxTasks.length === 0 && !addingTask && (listView || unscheduledDayTasks.length === 0) ? (
                 <div className="py-8 text-center">
                   <p className="text-xs text-muted-foreground">Inbox is clear</p>
                 </div>
               ) : (
                 <>
-                  {unscheduledDayTasks.length > 0 && (
+                  {!listView && unscheduledDayTasks.length > 0 && (
                     <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wide px-1 pt-2">
                       Inbox
                     </p>
